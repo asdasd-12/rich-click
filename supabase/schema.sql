@@ -146,11 +146,19 @@ begin
   if listing.seller_id=buyer then raise exception 'CANNOT_BUY_OWN_LISTING'; end if;
   select * into buyer_wallet from public.player_wallets where user_id=buyer for update;
   if buyer_wallet.balance < listing.unit_price*listing.quantity then raise exception 'NOT_ENOUGH_BALANCE'; end if;
+  -- All acquisitions count toward the lifetime cap of three copies per relic type.
+  insert into public.player_relics(user_id,relic_id,owned_count,purchased_count)
+  values(buyer,listing.relic_id,0,0) on conflict do nothing;
+  perform 1 from public.player_relics where user_id=buyer and relic_id=listing.relic_id for update;
+  if (select purchased_count from public.player_relics where user_id=buyer and relic_id=listing.relic_id)+listing.quantity>3 then
+    raise exception 'PURCHASE_LIMIT_REACHED';
+  end if;
   update public.player_wallets set balance=balance-listing.unit_price*listing.quantity,updated_at=now() where user_id=buyer;
   update public.player_wallets set balance=balance+listing.unit_price*listing.quantity,updated_at=now() where user_id=listing.seller_id;
   insert into public.player_relics(user_id,relic_id,owned_count,purchased_count)
   values(buyer,listing.relic_id,listing.quantity,0)
-  on conflict(user_id,relic_id) do update set owned_count=public.player_relics.owned_count+excluded.owned_count;
+  on conflict(user_id,relic_id) do update set owned_count=public.player_relics.owned_count+excluded.owned_count,
+    purchased_count=public.player_relics.purchased_count+excluded.owned_count;
   update public.player_relics set owned_count=owned_count-listing.quantity,listed_count=listed_count-listing.quantity
   where user_id=listing.seller_id and relic_id=listing.relic_id;
   update public.market_listings set status='sold' where id=p_listing_id;
