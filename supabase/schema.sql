@@ -201,3 +201,8 @@ grant execute on function public.purchase_relic(text) to authenticated;
 grant execute on function public.create_relic_listing(text,integer,bigint) to authenticated;
 grant execute on function public.buy_relic_listing(uuid) to authenticated;
 grant execute on function public.cancel_relic_listing(uuid) to authenticated;
+
+revoke all on function public.purchase_relic(text) from public, anon;
+revoke all on function public.create_relic_listing(text,integer,bigint) from public, anon;
+revoke all on function public.buy_relic_listing(uuid) from public, anon;
+revoke all on function public.cancel_relic_listing(uuid) from public, anon;
