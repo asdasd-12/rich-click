@@ -379,3 +379,195 @@ grant execute on function public.admin_search_players(text) to authenticated;
 grant execute on function public.admin_grant_money(uuid,bigint) to authenticated;
 revoke all on function public.admin_search_players(text) from public,anon;
 revoke all on function public.admin_grant_money(uuid,bigint) from public,anon;
+
+
+-- Full game administration: balances, global announcements, economy settings,
+-- relic inventory management, and an auditable admin action log.
+create table if not exists public.game_settings (
+  id boolean primary key default true check(id),
+  click_multiplier numeric not null default 1 check(click_multiplier between 0 and 1000),
+  passive_multiplier numeric not null default 1 check(passive_multiplier between 0 and 1000),
+  maintenance_mode boolean not null default false,
+  updated_at timestamptz not null default now()
+);
+insert into public.game_settings(id) values(true) on conflict(id) do nothing;
+alter table public.game_settings enable row level security;
+drop policy if exists "Game settings readable" on public.game_settings;
+create policy "Game settings readable" on public.game_settings for select using(true);
+
+create table if not exists public.game_announcements (
+  id bigserial primary key,
+  title text not null check(char_length(title) between 1 and 80),
+  message text not null check(char_length(message) between 1 and 500),
+  active boolean not null default true,
+  created_at timestamptz not null default now(),
+  created_by uuid references auth.users(id)
+);
+alter table public.game_announcements enable row level security;
+drop policy if exists "Active game announcement readable" on public.game_announcements;
+create policy "Active game announcement readable" on public.game_announcements for select using(active=true);
+
+create table if not exists public.admin_action_logs (
+  id bigserial primary key,
+  admin_id uuid references auth.users(id),
+  action text not null,
+  details text not null default '',
+  created_at timestamptz not null default now()
+);
+alter table public.admin_action_logs enable row level security;
+
+create or replace function public.admin_log(p_action text,p_details text)
+returns void language sql security definer set search_path=public
+as $$ insert into public.admin_action_logs(admin_id,action,details) values(auth.uid(),left(p_action,80),left(p_details,500)); $$;
+
+create or replace function public.admin_change_player_balance(p_user_id uuid,p_amount bigint,p_mode text)
+returns jsonb language plpgsql security definer set search_path=public
+as $$
+declare new_balance bigint;
+begin
+ if not exists(select 1 from public.rich_click_admins where user_id=auth.uid()) then raise exception 'ADMIN_REQUIRED'; end if;
+ if p_amount is null or p_amount<0 or p_amount>1000000000000000 or p_mode not in ('add','remove','set') then raise exception 'INVALID_INPUT'; end if;
+ update public.player_wallets set balance=case p_mode when 'add' then least(balance+p_amount,9000000000000000000::bigint) when 'remove' then greatest(0,balance-p_amount) else p_amount end,updated_at=now()
+ where user_id=p_user_id returning balance into new_balance;
+ if not found then raise exception 'PLAYER_NOT_FOUND'; end if;
+ perform public.admin_log('player_balance',p_mode||' '||p_amount||' user='||p_user_id);
+ return jsonb_build_object('balance',new_balance);
+end $$;
+
+create or replace function public.admin_adjust_all_balances(p_mode text,p_amount bigint)
+returns jsonb language plpgsql security definer set search_path=public
+as $$
+declare affected integer; delta numeric;
+begin
+ if not exists(select 1 from public.rich_click_admins where user_id=auth.uid()) then raise exception 'ADMIN_REQUIRED'; end if;
+ if p_mode not in ('add','remove','reset') or p_amount is null or p_amount<0 or p_amount>1000000000000000 then raise exception 'INVALID_INPUT'; end if;
+ if p_mode='add' then
+  update public.player_wallets set balance=least(balance+p_amount,9000000000000000000::bigint),lifetime_earned=lifetime_earned+p_amount,updated_at=now();
+ elsif p_mode='remove' then
+  update public.player_wallets set balance=greatest(0,balance-p_amount),updated_at=now();
+ else
+  update public.player_wallets set balance=0,updated_at=now();
+ end if;
+ get diagnostics affected=row_count;
+ delta:=case p_mode when 'add' then p_amount::numeric*affected when 'remove' then -(p_amount::numeric*affected) else 0 end;
+ perform public.admin_log('global_balance',p_mode||' amount='||p_amount||' affected='||affected);
+ return jsonb_build_object('affected',affected,'total_delta',delta);
+end $$;
+
+create or replace function public.admin_publish_announcement(p_title text,p_message text)
+returns bigint language plpgsql security definer set search_path=public
+as $$
+declare new_id bigint;
+begin
+ if not exists(select 1 from public.rich_click_admins where user_id=auth.uid()) then raise exception 'ADMIN_REQUIRED'; end if;
+ if p_title is null or char_length(trim(p_title))<1 or char_length(p_title)>80 or p_message is null or char_length(trim(p_message))<1 or char_length(p_message)>500 then raise exception 'INVALID_ANNOUNCEMENT'; end if;
+ update public.game_announcements set active=false where active=true;
+ insert into public.game_announcements(title,message,created_by) values(trim(p_title),trim(p_message),auth.uid()) returning id into new_id;
+ perform public.admin_log('announcement','published id='||new_id);
+ return new_id;
+end $$;
+create or replace function public.admin_clear_announcement()
+returns boolean language plpgsql security definer set search_path=public
+as $$ begin
+ if not exists(select 1 from public.rich_click_admins where user_id=auth.uid()) then raise exception 'ADMIN_REQUIRED'; end if;
+ update public.game_announcements set active=false where active=true;
+ perform public.admin_log('announcement','cleared');
+ return true;
+end $$;
+
+create or replace function public.admin_get_settings()
+returns jsonb language plpgsql stable security definer set search_path=public
+as $$ declare x public.game_settings%rowtype; begin
+ if not exists(select 1 from public.rich_click_admins where user_id=auth.uid()) then raise exception 'ADMIN_REQUIRED'; end if;
+ select * into x from public.game_settings where id=true;
+ return jsonb_build_object('click_multiplier',x.click_multiplier,'passive_multiplier',x.passive_multiplier,'maintenance_mode',x.maintenance_mode);
+end $$;
+create or replace function public.admin_update_settings(p_click_multiplier numeric,p_passive_multiplier numeric,p_maintenance_mode boolean)
+returns boolean language plpgsql security definer set search_path=public
+as $$ begin
+ if not exists(select 1 from public.rich_click_admins where user_id=auth.uid()) then raise exception 'ADMIN_REQUIRED'; end if;
+ if p_click_multiplier not between 0 and 1000 or p_passive_multiplier not between 0 and 1000 then raise exception 'INVALID_MULTIPLIER'; end if;
+ update public.game_settings set click_multiplier=p_click_multiplier,passive_multiplier=p_passive_multiplier,maintenance_mode=coalesce(p_maintenance_mode,false),updated_at=now() where id=true;
+ perform public.admin_log('game_settings','click='||p_click_multiplier||' passive='||p_passive_multiplier||' maintenance='||p_maintenance_mode);
+ return true;
+end $$;
+
+create or replace function public.admin_manage_relic(p_user_id uuid,p_relic_id text,p_quantity integer,p_mode text)
+returns jsonb language plpgsql security definer set search_path=public
+as $$ declare inv public.player_relics%rowtype; begin
+ if not exists(select 1 from public.rich_click_admins where user_id=auth.uid()) then raise exception 'ADMIN_REQUIRED'; end if;
+ if p_quantity is null or p_quantity<1 or p_quantity>100 or p_mode not in ('give','remove') then raise exception 'INVALID_INPUT'; end if;
+ if not exists(select 1 from public.relic_catalog where id=p_relic_id) then raise exception 'RELIC_NOT_FOUND'; end if;
+ insert into public.player_relics(user_id,relic_id,owned_count,purchased_count) values(p_user_id,p_relic_id,0,0) on conflict do nothing;
+ select * into inv from public.player_relics where user_id=p_user_id and relic_id=p_relic_id for update;
+ if p_mode='give' then update public.player_relics set owned_count=owned_count+p_quantity where user_id=p_user_id and relic_id=p_relic_id;
+ else
+  if inv.owned_count-inv.listed_count<p_quantity then raise exception 'NOT_ENOUGH_UNLISTED_ITEMS'; end if;
+  update public.player_relics set owned_count=owned_count-p_quantity where user_id=p_user_id and relic_id=p_relic_id;
+ end if;
+ perform public.admin_log('relic_'||p_mode,'user='||p_user_id||' relic='||p_relic_id||' qty='||p_quantity);
+ return jsonb_build_object('success',true,'message',p_mode||' '||p_quantity||' x '||p_relic_id);
+end $$;
+
+create or replace function public.admin_recent_logs()
+returns table(created_at timestamptz,admin_nickname text,action text,details text)
+language plpgsql stable security definer set search_path=public
+as $$ begin
+ if not exists(select 1 from public.rich_click_admins where user_id=auth.uid()) then raise exception 'ADMIN_REQUIRED'; end if;
+ return query select l.created_at,coalesce(p.nickname,'Администратор'),l.action,l.details
+ from public.admin_action_logs l left join public.player_profiles p on p.user_id=l.admin_id
+ order by l.created_at desc limit 50;
+end $$;
+
+-- Apply server-side game controls to click and passive-income RPCs.
+create or replace function public.earn_click(p_amount bigint)
+returns jsonb language plpgsql security definer set search_path=public
+as $$
+declare uid uuid:=auth.uid(); w public.player_wallets%rowtype; reward bigint; settings public.game_settings%rowtype;
+begin
+ if uid is null then raise exception 'AUTH_REQUIRED'; end if;
+ select * into settings from public.game_settings where id=true;
+ if settings.maintenance_mode then raise exception 'MAINTENANCE_MODE'; end if;
+ if p_amount is null or p_amount<1 then raise exception 'INVALID_REWARD'; end if;
+ select * into w from public.player_wallets where user_id=uid for update;
+ if not found then raise exception 'WALLET_NOT_FOUND'; end if;
+ if w.last_click_at is not null and w.last_click_at>now()-interval '150 milliseconds' then raise exception 'CLICK_TOO_FAST'; end if;
+ reward:=least(floor(least(p_amount,100)*settings.click_multiplier)::bigint,1000000000000);
+ update public.player_wallets set balance=balance+reward,lifetime_earned=lifetime_earned+reward,last_click_at=now(),updated_at=now() where user_id=uid returning * into w;
+ return jsonb_build_object('balance',w.balance,'earned',w.lifetime_earned,'reward',reward);
+end $$;
+
+create or replace function public.collect_passive_income()
+returns jsonb language plpgsql security definer set search_path=public
+as $$
+declare uid uuid:=auth.uid(); w public.player_wallets%rowtype; inc bigint; elapsed numeric; reward bigint; settings public.game_settings%rowtype;
+begin
+ if uid is null then raise exception 'AUTH_REQUIRED'; end if;
+ select * into settings from public.game_settings where id=true;
+ select * into w from public.player_wallets where user_id=uid for update;
+ if not found then raise exception 'WALLET_NOT_FOUND'; end if;
+ select coalesce(sum(a.income_per_second*p.quantity),0)::bigint into inc from public.player_assets p join public.asset_catalog a using(asset_key) where p.user_id=uid;
+ inc:=floor(inc*settings.passive_multiplier)::bigint;
+ elapsed:=greatest(0,least(extract(epoch from(now()-w.last_income_at)),86400));
+ reward:=case when settings.maintenance_mode then 0 else floor(elapsed*inc)::bigint end;
+ update public.player_wallets set balance=balance+reward,lifetime_earned=lifetime_earned+reward,last_income_at=now(),updated_at=now() where user_id=uid returning * into w;
+ return jsonb_build_object('balance',w.balance,'earned',w.lifetime_earned,'income',inc,'reward',reward);
+end $$;
+
+grant select on public.game_announcements,public.game_settings to anon,authenticated;
+grant execute on function public.admin_change_player_balance(uuid,bigint,text) to authenticated;
+grant execute on function public.admin_adjust_all_balances(text,bigint) to authenticated;
+grant execute on function public.admin_publish_announcement(text,text) to authenticated;
+grant execute on function public.admin_clear_announcement() to authenticated;
+grant execute on function public.admin_get_settings() to authenticated;
+grant execute on function public.admin_update_settings(numeric,numeric,boolean) to authenticated;
+grant execute on function public.admin_manage_relic(uuid,text,integer,text) to authenticated;
+grant execute on function public.admin_recent_logs() to authenticated;
+revoke all on function public.admin_change_player_balance(uuid,bigint,text) from public,anon;
+revoke all on function public.admin_adjust_all_balances(text,bigint) from public,anon;
+revoke all on function public.admin_publish_announcement(text,text) from public,anon;
+revoke all on function public.admin_clear_announcement() from public,anon;
+revoke all on function public.admin_get_settings() from public,anon;
+revoke all on function public.admin_update_settings(numeric,numeric,boolean) from public,anon;
+revoke all on function public.admin_manage_relic(uuid,text,integer,text) from public,anon;
+revoke all on function public.admin_recent_logs() from public,anon;
