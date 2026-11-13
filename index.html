@@ -208,10 +208,10 @@ window.showPage=showPage;
 $('clicker').onclick=()=>addCash(s.click);
 $('rebirthButton').onclick=async()=>{const count=Number(s.rebirths)||0;if(count>=50)return;const cost=100000*Math.pow(10,count);if(s.cash<cost)return alert('Для перерождения нужно '+fmt(cost)+'.');if(!confirm('Переродиться за '+fmt(cost)+'? Баланс и заработок обнулятся, множитель клика станет '+(1+(count+1)*0.1).toFixed(1)+'x.'))return;const {data:{session}}=await sb.auth.getSession();if(session){const {data,error}=await sb.rpc('purchase_rebirth');if(error)return alert('Перерождение не удалось: '+error.message);s.cash=Number(data.balance);s.earned=0;s.rebirths=Number(data.rebirths);save();render();return;}s.cash-=cost;s.earned=0;s.rebirths=count+1;save();render();};
 async function buy(kind,i){let arr=kind==='business'?businesses:kind==='property'?properties:cars,item=arr[i],cost=item[3],key=kind+':'+i,limit=arr[i][6]==='vintage'?1:kind==='business'?5:kind==='property'?10:3,owned=Number(s.owned[key])||0;if(owned>=limit)return alert('Лимит владения этим объектом: '+limit+' шт.');const {data:{session}}=await sb.auth.getSession();if(session){const {data,error}=await sb.rpc('purchase_asset',{p_asset_key:key});if(error)return alert(error.message.includes('ASSET_LIMIT_REACHED')?'Достигнут лимит: '+limit+' шт. этого объекта.':'Покупка не прошла: '+error.message);s.cash=Number(data.balance);s.owned[key]=Number(data.quantity);save();render();return;}if(s.cash<cost)return alert('Не хватает денег!');s.cash-=cost;s.owned[key]=owned+1;save();render()}
-const carPhotoCache=new Map(),carPhotoPending=new Map();
+const carPhotoCache=new Map(),carPhotoPending=new Map(),catalogPhotoUsed=new Set();
 function cleanPhotoText(value){return String(value||'').replace(/<[^>]*>/g,'').replace(/&amp;/g,'&').replace(/&#39;/g,"'").replace(/&quot;/g,'"').trim()}
-async function findPhoto(query,fallbacks=[]){
- const cacheKey=query+'|'+fallbacks.join('|');
+async function findPhoto(query,fallbacks=[],excludeUrls=[]){
+ const cacheKey=query+'|'+fallbacks.join('|')+'|exclude:'+excludeUrls.join('|');
  if(carPhotoCache.has(cacheKey))return carPhotoCache.get(cacheKey);
  if(carPhotoPending.has(cacheKey))return carPhotoPending.get(cacheKey);
  const task=(async()=>{
@@ -223,7 +223,7 @@ async function findPhoto(query,fallbacks=[]){
     const data=await response.json(),pages=Object.values(data.query?.pages||{});
     const bad=/(logo|emblem|badge|icon|flag|coat of arms|toy|die.?cast|hot wheels|miniature|scale model|brochure|poster|drawing|diagram|wheel rim)/i;
     const words=term.toLowerCase().replace(/[^a-z0-9]+/g,' ').split(/\s+/).filter(w=>w.length>2&&!['car','cars','photo','photograph','automobile','vehicle','model','picture'].includes(w));
-    const ranked=pages.filter(p=>p.imageinfo?.[0]?.thumburl&&!bad.test(p.title||'')).map(p=>{
+    const ranked=pages.filter(p=>p.imageinfo?.[0]?.thumburl&&!excludeUrls.includes(p.imageinfo[0].thumburl)&&!bad.test(p.title||'')).map(p=>{
      const info=p.imageinfo[0],title=(p.title||'').toLowerCase();
      let score=words.reduce((n,w)=>n+(title.includes(w)?3:0),0);
      if(words.length&&words.every(w=>title.includes(w)))score+=12;
@@ -246,25 +246,51 @@ function showFoundPhoto(el,photo,alt){
  const img=document.createElement('img');img.className='car-photo'+(el.classList.contains('garage-photo')?' garage-photo':'');img.loading='lazy';img.src=photo.url;img.alt=alt;img.title='Фото: '+photo.credit+' · '+photo.license;img.onerror=()=>{const fallback=document.createElement('div');fallback.className='car-photo car-photo-loading photo-missing';fallback.textContent='ФОТО НЕДОСТУПНО';img.replaceWith(fallback)};el.replaceWith(img);
  const credit=document.createElement('div');credit.className='photo-credit';credit.textContent='Фото: '+photo.credit+' · '+photo.license;img.after(credit);
 }
+const catalogPhotoQueries={
+ 'Кофейня':['independent coffee shop street facade','specialty cafe storefront exterior'],
+ 'Бургерная':['hamburger restaurant storefront exterior','fast food burger restaurant building'],
+ 'Супермаркет':['large supermarket exterior entrance','grocery supermarket building facade'],
+ 'Отель':['luxury hotel building exterior','boutique hotel street facade'],
+ 'Завод':['industrial manufacturing factory exterior','modern factory production plant'],
+ 'Космопорт':['spaceport launch terminal architecture','space center launch facility exterior'],
+ 'Сеть пиццерий':['pizza restaurant storefront exterior','pizzeria restaurant building'],
+ 'Нефтехранилище':['oil storage tank farm aerial photograph','petroleum storage terminal tanks'],
+ 'Частный банк':['modern bank headquarters building exterior','bank branch architecture'],
+ 'Телеком-компания':['telecommunications company headquarters building','telecom data center exterior'],
+ 'Космическая корпорация':['aerospace company campus building','space technology research center exterior'],
+ 'Энергетический холдинг':['power company headquarters building','electric utility industrial facility'],
+ 'Морской порт':['container seaport terminal aerial photograph','commercial shipping port cranes'],
+ 'Нефтяная корпорация':['oil refinery industrial complex aerial','petroleum refinery exterior'],
+ 'Строительный холдинг':['construction company headquarters architecture','large construction engineering office'],
+ 'Глобальный маркетплейс':['e commerce company headquarters building','modern logistics fulfillment center exterior'],
+ 'ИИ-лаборатория':['artificial intelligence research laboratory building','technology research campus exterior'],
+ 'Биотех-корпорация':['biotechnology research campus building','biomedical laboratory exterior'],
+ 'Международный конгломерат':['corporate headquarters skyscraper exterior','international business district tower'],
+ 'Орбитальная империя':['space research campus futuristic architecture','orbital space station concept architecture'],
+ 'Студия':['small modern studio apartment building exterior','compact apartment building facade'],
+ 'Пентхаус':['luxury penthouse apartment terrace skyline','penthouse residential tower exterior'],
+ 'Жилой комплекс':['modern residential apartment complex exterior','multi building housing development'],
+ 'Частный остров':['private tropical island aerial villas','luxury island estate aerial photograph'],
+ 'Торговый центр':['shopping mall exterior architecture','large retail mall entrance'],
+ 'Небоскрёб':['modern glass skyscraper city center','office skyscraper architecture exterior'],
+ 'Курортный комплекс':['seaside luxury resort hotel aerial','tropical beach resort buildings'],
+ 'Городской квартал':['modern mixed use urban city block aerial','European residential city quarter architecture'],
+ 'Исторический замок':['medieval stone castle exterior photograph','historic European castle aerial'],
+ 'Архипелаг вилл':['overwater luxury villas aerial resort','private island villas aerial photograph'],
+ 'Развлекательный квартал':['entertainment district night city architecture','urban leisure district aerial'],
+ 'Национальная арена':['modern national sports stadium exterior','large football arena aerial photograph'],
+ 'Умный мегаполис':['futuristic sustainable smart city skyline','modern eco city architecture concept'],
+ 'Лунная база':['lunar habitat research base concept architecture','moon base futuristic architecture concept']
+};
 async function loadCatalogPhotos(root,arr,kind){
  const nodes=Array.from(root.querySelectorAll('[data-catalog-photo]'));let cursor=0;
  async function worker(){while(cursor<nodes.length){const el=nodes[cursor++],index=Number(el.dataset.catalogPhoto),item=arr[index];if(!item)continue;
-  let query,fallbacks=[];
-  if(kind==='business'){
-   query=item[1]+' '+item[2]+' business building';
-   fallbacks=[item[1]+' company headquarters',item[2]+' commercial building','modern commercial building exterior','office tower architecture'];
-   if(/косм|орбит|ии-|биотех|будущ|империя/i.test(item[1]+' '+item[2]))fallbacks=[item[1]+' futuristic technology architecture','futuristic science building concept art','modern technology campus'];
-  }else{
-   query=item[1]+' '+item[2]+' architecture building';
-   fallbacks=[item[1]+' real estate architecture',item[2]+' property building','modern luxury residential architecture','apartment building exterior'];
-   if(/остров|архипелаг/i.test(item[1]))fallbacks=['private island luxury villas aerial','tropical island resort'];
-   if(/замок/i.test(item[1]))fallbacks=['historic castle exterior'];
-   if(/арена/i.test(item[1]))fallbacks=['modern sports stadium arena'];
-   if(/лунн|умный мегаполис/i.test(item[1]))fallbacks=['futuristic city architecture concept art','lunar base concept art'];
-  }
-  const photo=await findPhoto(query,fallbacks);showFoundPhoto(el,photo,item[1]);
+  const queries=catalogPhotoQueries[item[1]]||[item[1]+' '+item[2]+' '+(kind==='business'?'business exterior photograph':'residential property architecture photograph')];
+  const photo=await findPhoto(queries[0],queries.slice(1),[...catalogPhotoUsed]);
+  if(photo){catalogPhotoUsed.add(photo.url);showFoundPhoto(el,photo,item[1]);}
+  else{el.classList.add('photo-missing');el.textContent='ФОТО НЕ НАЙДЕНО';}
  }}
- Promise.all(Array.from({length:Math.min(4,nodes.length)},()=>worker()));
+ await worker();
 }
 async function loadRelicPhotos(root){
  const nodes=Array.from(root.querySelectorAll('[data-relic-photo]'));let cursor=0;
