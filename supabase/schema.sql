@@ -571,3 +571,70 @@ revoke all on function public.admin_get_settings() from public,anon;
 revoke all on function public.admin_update_settings(numeric,numeric,boolean) from public,anon;
 revoke all on function public.admin_manage_relic(uuid,text,integer,text) from public,anon;
 revoke all on function public.admin_recent_logs() from public,anon;
+
+
+-- Respect maintenance mode for all player-facing purchases as well.
+create or replace function public.purchase_asset(p_asset_key text)
+returns jsonb language plpgsql security definer set search_path=public as $$
+declare uid uuid:=auth.uid(); a public.asset_catalog%rowtype; w public.player_wallets%rowtype; qty integer; settings public.game_settings%rowtype;
+begin
+ if uid is null then raise exception 'AUTH_REQUIRED'; end if;
+ select * into settings from public.game_settings where id=true;
+ if settings.maintenance_mode then raise exception 'MAINTENANCE_MODE'; end if;
+ select * into a from public.asset_catalog where asset_key=p_asset_key;
+ if not found then raise exception 'ASSET_NOT_FOUND'; end if;
+ select * into w from public.player_wallets where user_id=uid for update;
+ if not found then raise exception 'WALLET_NOT_FOUND'; end if;
+ if w.balance<a.price then raise exception 'NOT_ENOUGH_BALANCE'; end if;
+ update public.player_wallets set balance=balance-a.price,updated_at=now() where user_id=uid;
+ insert into public.player_assets(user_id,asset_key,quantity) values(uid,p_asset_key,1)
+ on conflict(user_id,asset_key) do update set quantity=public.player_assets.quantity+1 returning quantity into qty;
+ return jsonb_build_object('success',true,'balance',w.balance-a.price,'quantity',qty);
+end $$;
+
+create or replace function public.purchase_relic(p_relic_id text)
+returns jsonb language plpgsql security definer set search_path=public
+as $$
+declare uid uuid:=auth.uid(); item public.relic_catalog%rowtype; wallet public.player_wallets%rowtype; inv public.player_relics%rowtype; settings public.game_settings%rowtype;
+begin
+ if uid is null then raise exception 'AUTH_REQUIRED'; end if;
+ select * into settings from public.game_settings where id=true;
+ if settings.maintenance_mode then raise exception 'MAINTENANCE_MODE'; end if;
+ select * into item from public.relic_catalog where id=p_relic_id;
+ if not found then raise exception 'RELIC_NOT_FOUND'; end if;
+ select * into wallet from public.player_wallets where user_id=uid for update;
+ if wallet.balance<item.base_value then raise exception 'NOT_ENOUGH_BALANCE'; end if;
+ insert into public.player_relics(user_id,relic_id,owned_count,purchased_count) values(uid,p_relic_id,0,0) on conflict do nothing;
+ select * into inv from public.player_relics where user_id=uid and relic_id=p_relic_id for update;
+ if inv.purchased_count>=3 then raise exception 'PURCHASE_LIMIT_REACHED'; end if;
+ update public.player_wallets set balance=balance-item.base_value,updated_at=now() where user_id=uid;
+ update public.player_relics set owned_count=owned_count+1,purchased_count=purchased_count+1 where user_id=uid and relic_id=p_relic_id;
+ return jsonb_build_object('success',true,'price',item.base_value,'remaining_balance',wallet.balance-item.base_value);
+end $$;
+
+create or replace function public.buy_relic_listing(p_listing_id uuid)
+returns jsonb language plpgsql security definer set search_path=public
+as $$
+declare buyer uuid:=auth.uid(); listing public.market_listings%rowtype; buyer_wallet public.player_wallets%rowtype; settings public.game_settings%rowtype;
+begin
+ if buyer is null then raise exception 'AUTH_REQUIRED'; end if;
+ select * into settings from public.game_settings where id=true;
+ if settings.maintenance_mode then raise exception 'MAINTENANCE_MODE'; end if;
+ select * into listing from public.market_listings where id=p_listing_id and status='active' for update;
+ if not found then raise exception 'LISTING_UNAVAILABLE'; end if;
+ if listing.seller_id=buyer then raise exception 'CANNOT_BUY_OWN_LISTING'; end if;
+ select * into buyer_wallet from public.player_wallets where user_id=buyer for update;
+ if buyer_wallet.balance<listing.unit_price*listing.quantity then raise exception 'NOT_ENOUGH_BALANCE'; end if;
+ insert into public.player_relics(user_id,relic_id,owned_count,purchased_count) values(buyer,listing.relic_id,0,0) on conflict do nothing;
+ perform 1 from public.player_relics where user_id=buyer and relic_id=listing.relic_id for update;
+ if (select purchased_count from public.player_relics where user_id=buyer and relic_id=listing.relic_id)+listing.quantity>3 then raise exception 'PURCHASE_LIMIT_REACHED'; end if;
+ update public.player_wallets set balance=balance-listing.unit_price*listing.quantity,updated_at=now() where user_id=buyer;
+ update public.player_wallets set balance=balance+listing.unit_price*listing.quantity,updated_at=now() where user_id=listing.seller_id;
+ insert into public.player_relics(user_id,relic_id,owned_count,purchased_count) values(buyer,listing.relic_id,listing.quantity,0)
+ on conflict(user_id,relic_id) do update set owned_count=public.player_relics.owned_count+excluded.owned_count,purchased_count=public.player_relics.purchased_count+excluded.owned_count;
+ update public.player_relics set owned_count=owned_count-listing.quantity,listed_count=listed_count-listing.quantity where user_id=listing.seller_id and relic_id=listing.relic_id;
+ update public.market_listings set status='sold' where id=p_listing_id;
+ return jsonb_build_object('success',true,'total',listing.unit_price*listing.quantity);
+end $$;
+
+revoke all on function public.admin_log(text,text) from public,anon;
