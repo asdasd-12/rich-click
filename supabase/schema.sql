@@ -21,7 +21,8 @@ insert into public.relic_catalog(id,name,rarity,base_value) values
 ('scribe','Сидящий писец','epic',380000),
 ('liberty','Свобода, ведущая народ','legendary',1100000),
 ('psyche','Амур и Психея','legendary',1600000),
-('hammurabi','Стела Хаммурапи','legendary',2200000)
+('hammurabi','Стела Хаммурапи','legendary',2200000),
+('david','Давид','common',26000),('thinker2','Поэт','common',31000),('waterlilies','Кувшинки','rare',115000),('scream','Крик','rare',135000),('guernica','Герника','rare',155000),('nightwatch','Ночной дозор','epic',430000),('creation','Сотворение Адама','epic',520000),('birthvenus','Рождение Венеры','epic',610000),('sunflowers','Подсолнухи','epic',720000),('girlred','Портрет дамы в красном','legendary',2600000),('terracotta','Терракотовая армия','legendary',3100000),('mask','Золотая погребальная маска','legendary',4200000),('crown','Императорская корона','legendary',5800000)
 on conflict (id) do update set name=excluded.name, rarity=excluded.rarity, base_value=excluded.base_value;
 
 create table if not exists public.player_profiles (
@@ -242,7 +243,25 @@ create table if not exists public.asset_catalog (asset_key text primary key,cate
 insert into public.asset_catalog(asset_key,category,name,price,income_per_second) values
 ('business:0','business','Кофейня',250,3),('business:1','business','Бургерная',1200,18),('business:2','business','Супермаркет',6500,95),('business:3','business','Отель',28000,430),('business:4','business','Завод',145000,2300),('business:5','business','Космопорт',900000,16000),
 ('property:0','property','Студия',80000,650),('property:1','property','Пентхаус',650000,5200),('property:2','property','Жилой комплекс',4200000,36000),('property:3','property','Частный остров',32000000,310000),
-('cars:0','cars','Merchedes Binz C-Class',12000,0),('cars:1','cars','Porshe 911 Carrera',95000,0),('cars:2','cars','Bavarian M5',180000,0),('cars:3','cars','Lamborgini Aventor',850000,0),('cars:4','cars','Ferrary SF90 Stradale',2400000,0)
+('cars:0','cars','Merchedes Binz C-Class',12000,0),('cars:1','cars','Porshe 911 Carrera',95000,0),('cars:2','cars','Bavarian M5',180000,0),('cars:3','cars','Lamborgini Aventor',850000,0),('cars:4','cars','Ferrari SF90 Stradale',2400000,0),
+('business:6','business','Сеть пиццерий',4200000,78000),
+('business:7','business','Нефтехранилище',18000000,360000),
+('business:8','business','Частный банк',85000000,1850000),
+('business:9','business','Телеком-компания',360000000,8200000),
+('business:10','business','Космическая корпорация',1500000000,38000000),
+('business:11','business','Энергетический холдинг',6500000000,190000000),
+('property:4','property','Торговый центр',145000000,1450000),
+('property:5','property','Небоскрёб',620000000,7200000),
+('property:6','property','Курортный комплекс',2400000000,31000000),
+('property:7','property','Городской квартал',9500000000,145000000),
+('cars:5','cars','Tesla Model S Plaid',4200000,0),
+('cars:6','cars','Lamborghini Urus',7800000,0),
+('cars:7','cars','Bentley Continental GT',14500000,0),
+('cars:8','cars','Rolls-Royce Ghost',28000000,0),
+('cars:9','cars','McLaren 750S',42000000,0),
+('cars:10','cars','Bugatti Chiron',180000000,0),
+('cars:11','cars','Pagani Huayra',320000000,0),
+('cars:12','cars','Koenigsegg Jesko',520000000,0)
 on conflict(asset_key) do update set category=excluded.category,name=excluded.name,price=excluded.price,income_per_second=excluded.income_per_second;
 create table if not exists public.player_assets(user_id uuid not null references auth.users(id) on delete cascade,asset_key text not null references public.asset_catalog(asset_key),quantity integer not null default 0 check(quantity>=0),primary key(user_id,asset_key));
 alter table public.player_assets enable row level security;
