@@ -318,8 +318,8 @@ const exactCarPhotos={
   license:'Public domain'
  },
  'BMW M5':{
-  url:'https://thumb.wikimedia.org/wikipedia/commons/thumb/6/65/BMW_M5_%28F90%29_sedan_%282%29.jpg/960px-BMW_M5_%28F90%29_sedan_%282%29.jpg',
-  credit:'Cjp24 · Wikimedia Commons',
+  url:'https://thumb.wikimedia.org/wikipedia/commons/thumb/c/c3/M5_F90_Side.jpg/960px-M5_F90_Side.jpg',
+  credit:'MrWalkr · Wikimedia Commons',
   license:'CC BY-SA 4.0'
  }
 };
@@ -340,12 +340,34 @@ const carBodyStyles={
  'Mercedes-Benz W123 (первое поколение)':'classic sedan','BMW M3 E30':'classic sports coupe',
  'Mercedes-Benz 190E Evo II':'sports sedan','BMW 2002 Turbo':'classic sports coupe'
 };
+async function findMatchingCarPhoto(name){
+ const core=name.replace(/\s*\([^)]*\)/g,'').toLowerCase().replace(/mercedes[- ]benz/g,'mercedes').replace(/[^a-z0-9]+/g,' ').trim().split(/\s+/).filter(w=>w.length>1&&!['class','taxi','sedan','coupe','roadster','spyder','suv','gt','amg','the'].includes(w));
+ if(!core.length)return null;
+ const searches=[name,name.replace(/\s*\([^)]*\)/g,'')].filter((v,i,a)=>a.indexOf(v)===i);
+ for(const term of searches){
+  try{
+   const api='https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrsearch='+encodeURIComponent('filetype:bitmap '+term)+'&gsrnamespace=6&gsrlimit=50&prop=imageinfo&iiprop=url|extmetadata|size&iiurlwidth=1100&format=json&origin=*';
+   const response=await fetch(api);if(!response.ok)continue;
+   const pages=Object.values((await response.json()).query?.pages||{});
+   const bad=/(logo|emblem|badge|icon|flag|toy|die.?cast|hot wheels|miniature|scale model|brochure|poster|drawing|diagram|wheel rim)/i;
+   const matches=pages.filter(p=>{
+    const title=(p.title||'').toLowerCase().replace(/mercedes[- ]benz/g,'mercedes').replace(/[^a-z0-9]+/g,' ');
+    return p.imageinfo?.[0]?.thumburl&&!bad.test(p.title||'')&&core.every(word=>title.includes(word));
+   }).sort((a,b)=>((b.imageinfo?.[0]?.width||0)*(b.imageinfo?.[0]?.height||0))-((a.imageinfo?.[0]?.width||0)*(a.imageinfo?.[0]?.height||0)));
+   if(matches.length){
+    const info=matches[0].imageinfo[0],meta=info.extmetadata||{};
+    return {url:info.thumburl,credit:cleanPhotoText(meta.Artist?.value)||'Wikimedia Commons',license:cleanPhotoText(meta.LicenseShortName?.value)||'Wikimedia Commons'};
+   }
+  }catch(error){}
+ }
+ return null;
+}
 function loadCarPhotos(root){
  const nodes=Array.from(root.querySelectorAll('[data-car-photo]'));let cursor=0;
  async function worker(){while(cursor<nodes.length){const el=nodes[cursor++],index=Number(el.getAttribute('data-car-photo')),car=cars[index];if(!car)continue;
   const exact=exactCarPhotos[car[1]],body=carBodyStyles[car[1]]||'car';
-  const photo=exact||await findPhoto('"'+car[1]+'" '+body,[car[1]+' '+body+' exterior photograph',car[1]+' '+body+' Wikimedia Commons',car[1]+' '+body]);
-  if(photo)showFoundPhoto(el,photo,car[1]+' '+body);else{el.classList.add('photo-missing');el.textContent='ФОТО МОДЕЛИ НЕ НАЙДЕНО';}
+  const photo=exact||await findMatchingCarPhoto(car[1]);
+  if(photo)showFoundPhoto(el,photo,car[1]+' '+body);else{el.classList.add('photo-missing');el.textContent='ФОТО ЭТОЙ МОДЕЛИ НЕ НАЙДЕНО';}
  }}
  Promise.all(Array.from({length:Math.min(4,nodes.length)},()=>worker()));
 }
