@@ -847,13 +847,13 @@ begin
  select * into w from public.player_wallets where user_id=uid for update;
  if not found then raise exception 'WALLET_NOT_FOUND'; end if;
  if w.rebirths>=50 then raise exception 'REBIRTH_MAX'; end if;
- cost:=100000::numeric*power(10::numeric,w.rebirths);
+ cost:=10000000::numeric*power(10::numeric,w.rebirths);
  if cost>w.balance then raise exception 'INSUFFICIENT_FUNDS'; end if;
  update public.player_wallets
    set balance=balance-cost::bigint,lifetime_earned=0,rebirths=rebirths+1,
        last_income_at=now(),last_click_at=null,updated_at=now()
    where user_id=uid returning * into w;
- return jsonb_build_object('balance',w.balance,'rebirths',w.rebirths,'click_multiplier',1+w.rebirths*0.1,'next_cost',100000::numeric*power(10::numeric,w.rebirths));
+ return jsonb_build_object('balance',w.balance,'rebirths',w.rebirths,'click_multiplier',1+w.rebirths*0.1,'next_cost',10000000::numeric*power(10::numeric,w.rebirths));
 end $$;
 
 grant execute on function public.purchase_luck_upgrade() to authenticated;
@@ -977,7 +977,7 @@ begin
  select * into w from public.player_wallets where user_id=uid for update;
  if not found then raise exception 'WALLET_NOT_FOUND'; end if;
  if w.rebirths>=50 then raise exception 'REBIRTH_MAX'; end if;
- cost:=100000::numeric*power(10::numeric,w.rebirths);
+ cost:=10000000::numeric*power(10::numeric,w.rebirths);
  if cost>w.balance then raise exception 'INSUFFICIENT_FUNDS'; end if;
  update public.player_wallets
    set balance=balance-cost::bigint,lifetime_earned=0,rebirths=rebirths+1,
@@ -988,7 +988,7 @@ begin
    'rebirths',w.rebirths,
    'click_multiplier',1+w.rebirths,
    'passive_multiplier',1+w.rebirths,
-   'next_cost',100000::numeric*power(10::numeric,w.rebirths)
+   'next_cost',10000000::numeric*power(10::numeric,w.rebirths)
  );
 end $$;
 
