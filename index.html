@@ -260,7 +260,7 @@ async function findPhoto(query,fallbacks=[],excludeUrls=[]){
 }
 function showFoundPhoto(el,photo,alt){
  if(!photo||!el.isConnected)return;
- const img=document.createElement('img');img.className='car-photo'+(el.classList.contains('garage-photo')?' garage-photo':'');img.loading='lazy';img.src=photo.url;img.alt=alt;img.title='Фото: '+photo.credit+' · '+photo.license;img.onerror=()=>{const fallback=document.createElement('div');fallback.className='car-photo car-photo-loading photo-missing';fallback.textContent='ФОТО НЕДОСТУПНО';img.replaceWith(fallback)};el.replaceWith(img);
+ const img=document.createElement('img');img.className='car-photo'+(el.classList.contains('garage-photo')?' garage-photo':'');img.loading='lazy';img.src=photo.url;img.alt=alt;img.title='Фото: '+photo.credit+' · '+photo.license;img.onerror=()=>{const fallback=document.createElement('div');fallback.className='car-photo car-photo-loading photo-missing';fallback.textContent='ФОТО НЕДОСТУПНО';const credit=img.nextElementSibling;if(credit?.classList.contains('photo-credit'))credit.remove();img.replaceWith(fallback)};el.replaceWith(img);
  const credit=document.createElement('div');credit.className='photo-credit';credit.textContent='Фото: '+photo.credit+' · '+photo.license;img.after(credit);
 }
 const catalogPhotoQueries={
@@ -303,11 +303,17 @@ async function loadCatalogPhotos(root,arr,kind){
  const nodes=Array.from(root.querySelectorAll('[data-catalog-photo]'));let cursor=0;
  async function worker(){while(cursor<nodes.length){const el=nodes[cursor++],index=Number(el.dataset.catalogPhoto),item=arr[index];if(!item)continue;
   const queries=catalogPhotoQueries[item[1]]||[item[1]+' '+item[2]+' '+(kind==='business'?'business exterior photograph':'residential property architecture photograph')];
-  const photo=await findPhoto(queries[0],queries.slice(1),[...catalogPhotoUsed]);
-  if(photo){catalogPhotoUsed.add(photo.url);showFoundPhoto(el,photo,item[1]);}
+  let photo=null;
+  for(let attempt=0;attempt<4;attempt++){
+   photo=await findPhoto(queries[0],queries.slice(1),[...catalogPhotoUsed]);
+   if(!photo)break;
+   if(catalogPhotoUsed.has(photo.url)){photo=null;continue;}
+   catalogPhotoUsed.add(photo.url);break;
+  }
+  if(photo)showFoundPhoto(el,photo,item[1]);
   else{el.classList.add('photo-missing');el.textContent='ФОТО НЕ НАЙДЕНО';}
  }}
- await worker();
+ await Promise.all(Array.from({length:Math.min(4,nodes.length)},()=>worker()));
 }
 async function loadRelicPhotos(root){
  const nodes=Array.from(root.querySelectorAll('[data-relic-photo]'));let cursor=0;
@@ -315,9 +321,15 @@ async function loadRelicPhotos(root){
   const sculpture=/скульптур|роден|микеланджело|мирон|древн.*егип|античн/i.test(item[3]+' '+item[2]);
   const query=item[2]+' '+item[3]+' '+(sculpture?'sculpture statue museum photograph':'painting artwork museum photograph');
   const fallbacks=[item[2]+' '+(sculpture?'sculpture statue':'painting artwork'),item[3]+' '+(sculpture?'sculpture museum':'painting museum')];
-  const photo=await findPhoto(query,fallbacks,[...relicPhotoUsed]);
-  if(photo)relicPhotoUsed.add(photo.url);
-  showFoundPhoto(el,photo,item[2]);
+  let photo=null;
+  for(let attempt=0;attempt<4;attempt++){
+   photo=await findPhoto(query,fallbacks,[...relicPhotoUsed]);
+   if(!photo)break;
+   if(relicPhotoUsed.has(photo.url)){photo=null;continue;}
+   relicPhotoUsed.add(photo.url);break;
+  }
+  if(photo)showFoundPhoto(el,photo,item[2]);
+  else{el.classList.add('photo-missing');el.textContent='ФОТО НЕ НАЙДЕНО';}
  }}
  await Promise.all(Array.from({length:Math.min(4,nodes.length)},()=>worker()));
 }
