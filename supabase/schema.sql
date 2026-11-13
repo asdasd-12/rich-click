@@ -912,3 +912,40 @@ insert into public.asset_catalog(asset_key,category,name,price,income_per_second
 ('cars:31','cars','Bugatti Tourbillon',1250000000,260000),
 ('cars:32','cars','Rolls-Royce Boat Tail',2800000000,650000)
 on conflict(asset_key) do update set category=excluded.category,name=excluded.name,price=excluded.price,income_per_second=excluded.income_per_second;
+
+
+-- Per-player quantity limits for each individual asset type.
+create or replace function public.purchase_asset(p_asset_key text)
+returns jsonb language plpgsql security definer set search_path=public as $$
+declare
+ uid uuid:=auth.uid();
+ a public.asset_catalog%rowtype;
+ w public.player_wallets%rowtype;
+ qty integer;
+ max_qty integer;
+ settings public.game_settings%rowtype;
+begin
+ if uid is null then raise exception 'AUTH_REQUIRED'; end if;
+ select * into settings from public.game_settings where id=true;
+ if settings.maintenance_mode then raise exception 'MAINTENANCE_MODE'; end if;
+ select * into a from public.asset_catalog where asset_key=p_asset_key;
+ if not found then raise exception 'ASSET_NOT_FOUND'; end if;
+ select * into w from public.player_wallets where user_id=uid for update;
+ if not found then raise exception 'WALLET_NOT_FOUND'; end if;
+ max_qty:=case a.category when 'business' then 5 when 'property' then 10 when 'cars' then 3 else 0 end;
+ if max_qty=0 then raise exception 'INVALID_ASSET_CATEGORY'; end if;
+ select coalesce(quantity,0) into qty from public.player_assets
+  where user_id=uid and asset_key=p_asset_key;
+ qty:=coalesce(qty,0);
+ if qty>=max_qty then
+  raise exception using message='ASSET_LIMIT_REACHED', detail='LIMIT='||max_qty;
+ end if;
+ if w.balance<a.price then raise exception 'NOT_ENOUGH_BALANCE'; end if;
+ update public.player_wallets set balance=balance-a.price,updated_at=now() where user_id=uid;
+ insert into public.player_assets(user_id,asset_key,quantity) values(uid,p_asset_key,1)
+ on conflict(user_id,asset_key) do update set quantity=public.player_assets.quantity+1
+ returning quantity into qty;
+ return jsonb_build_object('success',true,'balance',w.balance-a.price,'quantity',qty,'limit',max_qty);
+end $$;
+grant execute on function public.purchase_asset(text) to authenticated;
+revoke all on function public.purchase_asset(text) from public,anon;
