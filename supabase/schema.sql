@@ -638,3 +638,32 @@ begin
 end $$;
 
 revoke all on function public.admin_log(text,text) from public,anon;
+
+
+-- Enable database change events for the Rich Click live interface.
+-- Run this schema in Supabase SQL Editor to apply the publication changes.
+do $$
+declare
+  t text;
+begin
+  if exists (select 1 from pg_publication where pubname = 'supabase_realtime') then
+    foreach t in array array[
+      'player_wallets',
+      'player_assets',
+      'player_relics',
+      'player_profiles',
+      'market_listings',
+      'game_announcements'
+    ]
+    loop
+      if not exists (
+        select 1 from pg_publication_tables
+        where pubname = 'supabase_realtime'
+          and schemaname = 'public'
+          and tablename = t
+      ) then
+        execute format('alter publication supabase_realtime add table public.%I', t);
+      end if;
+    end loop;
+  end if;
+end $$;
