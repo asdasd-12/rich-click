@@ -217,7 +217,13 @@ async function findPhoto(query){
   try{
    const api='https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrsearch='+encodeURIComponent(query)+'&gsrnamespace=6&gsrlimit=8&prop=imageinfo&iiprop=url|extmetadata&iiurlwidth=900&format=json&origin=*';
    const response=await fetch(api);if(!response.ok)throw new Error('Wikimedia unavailable');
-   const data=await response.json(),pages=Object.values(data.query?.pages||{}),page=pages.find(p=>p.imageinfo?.[0]?.thumburl),info=page?.imageinfo?.[0];
+   let data=await response.json(),pages=Object.values(data.query?.pages||{});
+   if(!pages.length){
+    const fallback=query.split(/\\s+/).slice(0,3).join(' ');
+    const retry='https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrsearch='+encodeURIComponent(fallback)+'&gsrnamespace=6&gsrlimit=8&prop=imageinfo&iiprop=url|extmetadata&iiurlwidth=900&format=json&origin=*';
+    const retryResponse=await fetch(retry);if(retryResponse.ok){data=await retryResponse.json();pages=Object.values(data.query?.pages||{});}
+   }
+   const page=pages.find(p=>p.imageinfo?.[0]?.thumburl),info=page?.imageinfo?.[0];
    if(!info?.thumburl)throw new Error('No matching photo');
    const meta=info.extmetadata||{},credit=cleanPhotoText(meta.Artist?.value)||'Wikimedia Commons',license=cleanPhotoText(meta.LicenseShortName?.value)||'Wikimedia Commons';
    const result={url:info.thumburl,credit,license};carPhotoCache.set(query,result);return result;
