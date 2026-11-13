@@ -266,10 +266,18 @@ async function loadRelicPhotos(root){
  }}
  Promise.all(Array.from({length:Math.min(4,nodes.length)},()=>worker()));
 }
+const exactCarPhotos={
+ 'Ferrari 812 Competizione':{
+  url:'https://thumb.wikimedia.org/wikipedia/commons/thumb/0/01/Ferrari_812_Competizione.jpg/960px-Ferrari_812_Competizione.jpg',
+  credit:'Calreyn88 · Wikimedia Commons',
+  license:'CC BY-SA 4.0'
+ }
+};
 function loadCarPhotos(root){
  const nodes=Array.from(root.querySelectorAll('[data-car-photo]'));let cursor=0;
  async function worker(){while(cursor<nodes.length){const el=nodes[cursor++],index=Number(el.getAttribute('data-car-photo')),car=cars[index];if(!car)continue;
-  const photo=await findPhoto(car[1]+' car model', [car[1]+' automobile photo',car[1]+' vehicle','classic luxury car photography']);
+  const exact=exactCarPhotos[car[1]];
+  const photo=exact||await findPhoto(car[1]+' car model',[car[1]+' automobile photo',car[1]+' vehicle','classic luxury car photography']);
   showFoundPhoto(el,photo,car[1]);
  }}
  Promise.all(Array.from({length:Math.min(4,nodes.length)},()=>worker()));
