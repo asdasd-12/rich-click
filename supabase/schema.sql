@@ -206,3 +206,32 @@ revoke all on function public.purchase_relic(text) from public, anon;
 revoke all on function public.create_relic_listing(text,integer,bigint) from public, anon;
 revoke all on function public.buy_relic_listing(uuid) from public, anon;
 revoke all on function public.cancel_relic_listing(uuid) from public, anon;
+
+-- Server-side click earnings. A small cooldown and per-click cap reduce trivial client-side abuse.
+alter table public.player_wallets add column if not exists last_click_at timestamptz;
+create or replace function public.earn_click(p_amount bigint)
+returns jsonb language plpgsql security definer set search_path=public
+as $$
+declare uid uuid := auth.uid(); w public.player_wallets%rowtype; reward bigint;
+begin
+  if uid is null then raise exception 'AUTH_REQUIRED'; end if;
+  if p_amount is null or p_amount<1 then raise exception 'INVALID_REWARD'; end if;
+  select * into w from public.player_wallets where user_id=uid for update;
+  if not found then raise exception 'WALLET_NOT_FOUND'; end if;
+  if w.last_click_at is not null and w.last_click_at > now() - interval '150 milliseconds' then
+    raise exception 'CLICK_TOO_FAST';
+  end if;
+  reward := least(p_amount,100);
+  update public.player_wallets
+    set balance=balance+reward,
+        lifetime_earned=lifetime_earned+reward,
+        last_click_at=now(),
+        updated_at=now()
+    where user_id=uid
+    returning * into w;
+  return jsonb_build_object('balance',w.balance,'earned',w.lifetime_earned,'reward',reward);
+end;
+$$;
+grant execute on function public.earn_click(bigint) to authenticated;
+revoke all on function public.earn_click(bigint) from public, anon;
+
