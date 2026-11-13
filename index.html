@@ -196,7 +196,7 @@ function save(){localStorage.setItem('richClickSave',JSON.stringify(s))}
 async function addCash(n){
  const {data:{session}}=await sb.auth.getSession();
  if(session){
-  const {data,error}=await sb.rpc('earn_click',{p_amount:n});
+  const {data,error}=await sb.rpc('earn_click',{p_amount:1});
   if(error){if(!error.message.includes('CLICK_TOO_FAST'))alert('Не удалось начислить деньги: '+error.message);return;}
   s.cash=Number(data.balance);s.earned=Math.max(s.earned,Number(data.earned));if(data.rebirths!==undefined)s.rebirths=Number(data.rebirths)||0;save();render();return;
  }
@@ -364,7 +364,7 @@ $('itemGive').onclick=()=>adminItemAction('give');$('itemDelete').onclick=()=>ad
 async function loadAdminLogs(){const {data,error}=await sb.rpc('admin_recent_logs');const el=$('adminLogs');if(error){el.textContent='Ошибка загрузки: '+error.message;return;}el.replaceChildren();(data||[]).forEach(x=>{const d=document.createElement('div');d.className='leader';d.textContent=new Date(x.created_at).toLocaleString('ru-RU')+' · '+x.admin_nickname+' · '+x.action+' · '+x.details;el.append(d)});if(!data?.length)el.textContent='Пока действий нет.';}
 $('logsRefresh').onclick=loadAdminLogs;
 $('githubLogin').onclick=async()=>{const button=$('githubLogin');button.disabled=true;button.textContent='Переход к GitHub…';$('authStatus').textContent='Подключаем GitHub. Не закрывай страницу…';try{const redirectTo=location.origin+'/rich-click/';const {data,error}=await sb.auth.signInWithOAuth({provider:'github',options:{redirectTo,skipBrowserRedirect:false,queryParams:{allow_signup:'true'}}});if(error)throw error;if(data?.url)location.assign(data.url);}catch(error){$('authStatus').textContent='Не удалось начать вход: '+(error.message||String(error));button.disabled=false;button.textContent='Войти через GitHub';console.error('GitHub OAuth error:',error);}};
-$('githubLogout').onclick=async()=>{const button=$('githubLogout');button.disabled=true;const {error}=await sb.auth.signOut();button.disabled=false;if(error){$('authStatus').textContent='Ошибка выхода: '+error.message;return;}cloudMode=false;await refreshAuth();renderRating()};
+$('githubLogout').onclick=async()=>{const button=$('githubLogout');button.disabled=true;const {error}=await sb.auth.signOut();button.disabled=false;if(error){$('authStatus').textContent='Ошибка выхода: '+error.message;return;}cloudMode=false;s.luck=0;s.luckCost=1000000;s.rebirths=0;save();await refreshAuth();renderShop();render();renderRating()};
 sb.auth.onAuthStateChange(()=>{setTimeout(()=>{refreshAuth();renderRating()},0)});
 $('saveNick').onclick=async()=>{let v=$('nickname').value.trim();if(!v)return alert('Введи ник.');if(v.length>18)return alert('Ник должен быть не длиннее 18 символов.');const {data:{session}}=await sb.auth.getSession();if(session){const {data,error}=await sb.from('player_profiles').update({nickname:v}).eq('user_id',session.user.id).select('nickname').maybeSingle();if(error)return alert('Не удалось изменить ник в аккаунте: '+error.message);if(!data)return alert('Профиль игрока не найден в базе. Выйди из аккаунта и войди снова.');}s.nick=v;save();$('nickname').value=s.nick;render();await renderRating();alert('Ник успешно сохранён!')};
 $('reset').onclick=()=>{if(confirm('Точно сбросить весь прогресс?')){s=defaultState();save();render();renderShop()}};
