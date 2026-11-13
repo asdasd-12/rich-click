@@ -216,15 +216,25 @@ async function findPhoto(query,fallbacks=[]){
  if(carPhotoPending.has(cacheKey))return carPhotoPending.get(cacheKey);
  const task=(async()=>{
   try{
-   const terms=[...new Set([query,...fallbacks,query.split(/\\s+/).slice(0,3).join(' ')].filter(Boolean))];
+   const terms=[...new Set([query,...fallbacks,query.split(/\s+/).slice(0,3).join(' ')].filter(Boolean))];
    for(const term of terms){
-    const api='https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrsearch='+encodeURIComponent(term)+'&gsrnamespace=6&gsrlimit=10&prop=imageinfo&iiprop=url|extmetadata&iiurlwidth=900&format=json&origin=*';
+    const api='https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrsearch='+encodeURIComponent('filetype:bitmap '+term)+'&gsrnamespace=6&gsrlimit=30&prop=imageinfo&iiprop=url|extmetadata|size&iiurlwidth=1100&format=json&origin=*';
     const response=await fetch(api);if(!response.ok)continue;
     const data=await response.json(),pages=Object.values(data.query?.pages||{});
-    const page=pages.find(p=>p.imageinfo?.[0]?.thumburl),info=page?.imageinfo?.[0];
-    if(!info?.thumburl)continue;
-    const meta=info.extmetadata||{},credit=cleanPhotoText(meta.Artist?.value)||'Wikimedia Commons',license=cleanPhotoText(meta.LicenseShortName?.value)||'Wikimedia Commons';
-    const result={url:info.thumburl,credit,license};carPhotoCache.set(cacheKey,result);return result;
+    const bad=/(logo|emblem|badge|icon|flag|coat of arms|toy|die.?cast|hot wheels|miniature|scale model|brochure|poster|drawing|diagram|wheel rim)/i;
+    const words=term.toLowerCase().replace(/[^a-z0-9]+/g,' ').split(/\s+/).filter(w=>w.length>2&&!['car','cars','photo','photograph','automobile','vehicle','model','picture'].includes(w));
+    const ranked=pages.filter(p=>p.imageinfo?.[0]?.thumburl&&!bad.test(p.title||'')).map(p=>{
+     const info=p.imageinfo[0],title=(p.title||'').toLowerCase();
+     let score=words.reduce((n,w)=>n+(title.includes(w)?3:0),0);
+     if(words.length&&words.every(w=>title.includes(w)))score+=12;
+     const ratio=(info.width||1)/(info.height||1);
+     if(ratio>1.15&&ratio<2.5)score+=2;
+     return {info,score};
+    }).sort((a,b)=>b.score-a.score);
+    const chosen=ranked[0];
+    if(!chosen||chosen.score<3)continue;
+    const meta=chosen.info.extmetadata||{},credit=cleanPhotoText(meta.Artist?.value)||'Wikimedia Commons',license=cleanPhotoText(meta.LicenseShortName?.value)||'Wikimedia Commons';
+    const result={url:chosen.info.thumburl,credit,license};carPhotoCache.set(cacheKey,result);return result;
    }
   }catch(error){}
   carPhotoCache.set(cacheKey,null);return null;
@@ -233,7 +243,7 @@ async function findPhoto(query,fallbacks=[]){
 }
 function showFoundPhoto(el,photo,alt){
  if(!photo||!el.isConnected)return;
- const img=document.createElement('img');img.className='car-photo'+(el.classList.contains('garage-photo')?' garage-photo':'');img.loading='lazy';img.src=photo.url;img.alt=alt;img.title='Фото: '+photo.credit+' · '+photo.license;el.replaceWith(img);
+ const img=document.createElement('img');img.className='car-photo'+(el.classList.contains('garage-photo')?' garage-photo':'');img.loading='lazy';img.src=photo.url;img.alt=alt;img.title='Фото: '+photo.credit+' · '+photo.license;img.onerror=()=>{img.remove();const fallback=document.createElement('div');fallback.className='car-photo car-photo-loading';fallback.textContent='Фото недоступно';el.replaceWith(fallback)};el.replaceWith(img);
  const credit=document.createElement('div');credit.className='photo-credit';credit.textContent='Фото: '+photo.credit+' · '+photo.license;img.after(credit);
 }
 async function loadCatalogPhotos(root,arr,kind){
@@ -277,7 +287,7 @@ function loadCarPhotos(root){
  const nodes=Array.from(root.querySelectorAll('[data-car-photo]'));let cursor=0;
  async function worker(){while(cursor<nodes.length){const el=nodes[cursor++],index=Number(el.getAttribute('data-car-photo')),car=cars[index];if(!car)continue;
   const exact=exactCarPhotos[car[1]];
-  const photo=exact||await findPhoto(car[1]+' car model',[car[1]+' automobile photo',car[1]+' vehicle','classic luxury car photography']);
+  const photo=exact||await findPhoto('"'+car[1]+'"',[car[1]+' automobile',car[1]+' car exterior',car[1]]);
   showFoundPhoto(el,photo,car[1]);
  }}
  Promise.all(Array.from({length:Math.min(4,nodes.length)},()=>worker()));
