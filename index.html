@@ -80,6 +80,18 @@ window.buyRelic=async function(id){
  alert('Покупка успешна! Предмет добавлен в локальную коллекцию.');
 };
 
+async function syncCloudCollection(){
+ const {data:{session}}=await sb.auth.getSession();
+ if(!session)return;
+ const {data,error}=await sb.from('player_relics').select('relic_id,owned_count,purchased_count').eq('user_id',session.user.id);
+ if(error){console.warn('Collection sync:',error.message);return;}
+ s.collection=[];s.relicPurchases={};
+ for(const row of (data||[])){
+  s.relicPurchases[row.relic_id]=Number(row.purchased_count)||0;
+  for(let i=0;i<(Number(row.owned_count)||0);i++)s.collection.push(row.relic_id);
+ }
+ save();renderCollection();renderShop();renderMarket();
+}
 function renderCollection(){$('collectionTotal').textContent=s.collection.length+' предметов';$('relicCount').textContent=s.collection.length;$('collectionGrid').innerHTML=s.collection.length?s.collection.map(id=>{let r=relics.find(x=>x[0]===id);return '<article class="item"><div class="emoji">'+r[1]+'</div><div class="tag rarity-'+r[4]+'">'+rarityName[r[4]]+'</div><b>'+r[2]+'</b><div class="muted">'+r[3]+'</div></article>'}).join(''):'<div class="empty">Коллекция пока пуста. Загляни в магазин раритетов!</div>'}
 function render(){let inc=income(),level=1+Math.floor(Math.sqrt(s.earned/1000));$('balance').textContent=fmt(s.cash);$('heroBalance').textContent=fmt(s.cash);$('income').textContent=fmt(inc);$('perclick').textContent=fmt(s.click);$('clickHint').textContent='+ '+fmt(s.click)+' за нажатие';$('earned').textContent=fmt(s.earned);$('level').textContent=level;$('xpbar').style.width=(s.earned%Math.max(1,level*level*1000))/(Math.max(1,level*level*1000))*100+'%';$('assets').textContent=Object.values(s.owned).reduce((a,b)=>a+b,0);cards(businesses,'business','businessGrid');cards(properties,'property','propertyGrid');cards(cars,'cars','carsGrid');renderCollection();$('nickname').value=s.nick}
 async function renderMarket(){
@@ -105,7 +117,7 @@ window.cancelListing=async(id)=>{if(!confirm('Снять объявление с
 $('refreshMarket').onclick=renderMarket;
 async function renderRating(){const {data:sessionData}=await sb.auth.getSession();if(!sessionData.session){$('balanceLeaderboard').innerHTML='<div class="muted">Сначала войдите через GitHub.</div>';$('relicLeaderboard').innerHTML='<div class="muted">Сначала войдите через GitHub.</div>';return;}const [b,r]=await Promise.all([sb.from('balance_leaderboard').select('nickname,balance,rank').order('rank').limit(100),sb.from('relic_value_leaderboard').select('nickname,collection_value,rank').order('rank').limit(100)]);const draw=(el,data,field)=>{if(data.error){$(el).innerHTML='<div class="muted">Не удалось загрузить рейтинг. Проверьте, выполнен ли SQL из supabase/schema.sql.</div>';return;}$(el).innerHTML='<div class="leader"><b>#</b><b>Игрок</b><b>Стоимость</b></div>'+(data.data||[]).map(x=>'<div class="leader"><b>'+x.rank+'</b><b>'+escapeHtml(x.nickname)+'</b><b>'+fmt(x[field])+'</b></div>').join('')||'<div class="empty">Пока нет игроков.</div>'};draw('balanceLeaderboard',b,'balance');draw('relicLeaderboard',r,'collection_value')}
 function escapeHtml(x){return x.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
-async function refreshAuth(){const {data:{session}}=await sb.auth.getSession();cloudMode=!!session;$('authStatus').textContent=session?'Вход выполнен: '+(session.user.user_metadata.user_name||session.user.email||'GitHub игрок'):'Не выполнен вход.';$('githubLogin').hidden=!!session;$('githubLogout').hidden=!session;if(session){const nick=session.user.user_metadata.user_name||session.user.email?.split('@')[0]||'Игрок';const {data:wallet}=await sb.from('player_wallets').select('balance,lifetime_earned').eq('user_id',session.user.id).maybeSingle();if(wallet){s.cash=Number(wallet.balance);s.earned=Math.max(s.earned,Number(wallet.lifetime_earned));save();render();}renderMarket();}}
+async function refreshAuth(){const {data:{session}}=await sb.auth.getSession();cloudMode=!!session;$('authStatus').textContent=session?'Вход выполнен: '+(session.user.user_metadata.user_name||session.user.email||'GitHub игрок'):'Не выполнен вход.';$('githubLogin').hidden=!!session;$('githubLogout').hidden=!session;if(session){const nick=session.user.user_metadata.user_name||session.user.email?.split('@')[0]||'Игрок';const {data:wallet}=await sb.from('player_wallets').select('balance,lifetime_earned').eq('user_id',session.user.id).maybeSingle();if(wallet){s.cash=Number(wallet.balance);s.earned=Math.max(s.earned,Number(wallet.lifetime_earned));save();render();}await syncCloudCollection();}}
 $('githubLogin').onclick=async()=>{const {error}=await sb.auth.signInWithOAuth({provider:'github',options:{redirectTo:location.origin+location.pathname}});if(error)alert('Ошибка входа: '+error.message)};
 $('githubLogout').onclick=async()=>{await sb.auth.signOut();await refreshAuth();renderRating()};
 sb.auth.onAuthStateChange(()=>{setTimeout(()=>{refreshAuth();renderRating()},0)});
