@@ -94,6 +94,23 @@ body[data-theme="dark"] .item:hover{border-color:#8c792d}
 @media(max-width:800px){.wrap{padding:16px}.top{padding:13px 15px}}
 @media(max-width:520px){.wrap{padding:12px}.stat{min-width:calc(50% - 4px)}.nav button{padding:9px 6px}}
 
+
+
+/* Refined header stats */
+.stats{display:grid;grid-template-columns:repeat(3,minmax(112px,1fr));gap:9px;align-items:stretch}
+.stat{position:relative;isolation:isolate;overflow:hidden;display:flex;flex-direction:column;justify-content:center;gap:5px;min-width:112px;min-height:66px;padding:11px 14px;border:1px solid #e8e9ec;border-radius:15px;background:#fff;color:#17191d;box-shadow:0 3px 10px #17191d08;transition:border-color .18s,transform .18s}
+.stat:before{content:"";position:absolute;left:0;top:12px;bottom:12px;width:3px;border-radius:0 4px 4px 0;background:#ffdd2d}
+.stat small{color:#858a94;font-size:9px;font-weight:750;letter-spacing:1.05px;line-height:1.2}
+.stat b{color:#17191d;font-size:19px;font-weight:850;line-height:1.15;letter-spacing:-.45px;font-variant-numeric:tabular-nums}
+.stat:hover{border-color:#e6cd4c;transform:translateY(-1px)}
+body[data-theme="dark"] .stat{background:linear-gradient(145deg,#17191e,#111317);border-color:#2b2e35;color:#fff;box-shadow:inset 0 1px 0 #ffffff08}
+body[data-theme="dark"] .stat small{color:#9298a3}
+body[data-theme="dark"] .stat b{color:#ffdf3d}
+body[data-theme="dark"] .stat:before{background:#ffdd2d}
+body[data-theme="dark"] .stat:hover{border-color:#655a2c}
+@media(max-width:800px){.stats{width:100%;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}.stat{min-width:0;padding:10px 11px;min-height:62px}}
+@media(max-width:520px){.stats{gap:6px}.stat{padding:9px 8px;border-radius:12px;min-height:58px}.stat small{font-size:8px;letter-spacing:.65px}.stat b{font-size:16px}}
+
 </style>
 </head>
 <body><div class="wrap">
