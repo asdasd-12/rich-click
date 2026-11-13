@@ -887,3 +887,28 @@ update public.asset_catalog
 set price=price*3,
     income_per_second=income_per_second*3
 where category='property';
+
+
+-- Car collection expansion and rental/event income.
+update public.asset_catalog set income_per_second=case asset_key
+ when 'cars:0' then 8 when 'cars:1' then 35 when 'cars:2' then 55
+ when 'cars:3' then 180 when 'cars:4' then 420 when 'cars:5' then 650
+ when 'cars:6' then 950 when 'cars:7' then 1500 when 'cars:8' then 2200
+ when 'cars:9' then 3400 when 'cars:10' then 8500 when 'cars:11' then 14500
+ when 'cars:12' then 22000 when 'cars:13' then 1900 when 'cars:14' then 6200
+ when 'cars:15' then 10500 when 'cars:16' then 13200 when 'cars:17' then 16000
+ when 'cars:18' then 19500 when 'cars:19' then 24000 when 'cars:20' then 28000
+ when 'cars:21' then 36000 when 'cars:22' then 48000 else income_per_second end
+where category='cars';
+insert into public.asset_catalog(asset_key,category,name,price,income_per_second) values
+('cars:23','cars','Toyota Prius Taxi',1800000,180),
+('cars:24','cars','Mercedes-Benz V-Class',12500000,1250),
+('cars:25','cars','Range Rover SV',35000000,4200),
+('cars:26','cars','Porsche 911 GT3 RS',95000000,12500),
+('cars:27','cars','Mercedes-Maybach S-Class',145000000,22000),
+('cars:28','cars','Ferrari 812 Competizione',280000000,48000),
+('cars:29','cars','Lotus Evija',420000000,76000),
+('cars:30','cars','Aston Martin Valkyrie AMR Pro',680000000,125000),
+('cars:31','cars','Bugatti Tourbillon',1250000000,260000),
+('cars:32','cars','Rolls-Royce Boat Tail',2800000000,650000)
+on conflict(asset_key) do update set category=excluded.category,name=excluded.name,price=excluded.price,income_per_second=excluded.income_per_second;
