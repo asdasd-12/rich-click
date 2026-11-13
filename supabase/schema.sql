@@ -314,3 +314,68 @@ create or replace function public.collect_passive_income() returns jsonb languag
 declare uid uuid:=auth.uid(); w public.player_wallets%rowtype; inc bigint; elapsed numeric; reward bigint;
 begin if uid is null then raise exception 'AUTH_REQUIRED'; end if; select * into w from public.player_wallets where user_id=uid for update; if not found then raise exception 'WALLET_NOT_FOUND'; end if; select coalesce(sum(a.income_per_second*p.quantity),0)::bigint into inc from public.player_assets p join public.asset_catalog a using(asset_key) where p.user_id=uid; elapsed:=greatest(0,least(extract(epoch from(now()-w.last_income_at)),86400)); reward:=floor(elapsed*inc)::bigint; update public.player_wallets set balance=balance+reward,lifetime_earned=lifetime_earned+reward,last_income_at=now(),updated_at=now() where user_id=uid returning * into w; return jsonb_build_object('balance',w.balance,'earned',w.lifetime_earned,'income',inc,'reward',reward); end; $$;
 grant select on public.asset_catalog to anon,authenticated; grant select on public.player_assets to authenticated; grant execute on function public.purchase_asset(text) to authenticated; grant execute on function public.collect_passive_income() to authenticated; revoke all on function public.purchase_asset(text) from public,anon; revoke all on function public.collect_passive_income() from public,anon;
+
+
+-- Admin controls for issuing virtual currency.
+-- After the first GitHub login, copy your UUID from Authentication -> Users
+-- and run: insert into public.rich_click_admins(user_id) values ('YOUR-AUTH-USER-UUID');
+create table if not exists public.rich_click_admins (
+  user_id uuid primary key references auth.users(id) on delete cascade,
+  created_at timestamptz not null default now()
+);
+alter table public.rich_click_admins enable row level security;
+
+create or replace function public.is_rich_click_admin()
+returns boolean language sql stable security definer set search_path=public
+as $$
+  select exists(select 1 from public.rich_click_admins where user_id=auth.uid());
+$$;
+
+create or replace function public.admin_search_players(p_query text)
+returns table(user_id uuid,nickname text,balance bigint)
+language plpgsql stable security definer set search_path=public
+as $$
+begin
+  if auth.uid() is null or not exists(select 1 from public.rich_click_admins where user_id=auth.uid()) then
+    raise exception 'ADMIN_REQUIRED';
+  end if;
+  if p_query is null or char_length(trim(p_query))<2 then
+    raise exception 'QUERY_TOO_SHORT';
+  end if;
+  return query
+    select p.user_id,p.nickname,w.balance
+    from public.player_profiles p
+    join public.player_wallets w using(user_id)
+    where p.nickname ilike '%' || left(trim(p_query),18) || '%'
+    order by p.nickname
+    limit 20;
+end;
+$$;
+
+create or replace function public.admin_grant_money(p_user_id uuid,p_amount bigint)
+returns jsonb language plpgsql security definer set search_path=public
+as $$
+declare new_balance bigint;
+begin
+  if auth.uid() is null or not exists(select 1 from public.rich_click_admins where user_id=auth.uid()) then
+    raise exception 'ADMIN_REQUIRED';
+  end if;
+  if p_amount is null or p_amount<1 or p_amount>1000000000000000 then
+    raise exception 'INVALID_AMOUNT';
+  end if;
+  update public.player_wallets
+    set balance=balance+p_amount,
+        lifetime_earned=lifetime_earned+p_amount,
+        updated_at=now()
+    where user_id=p_user_id
+    returning balance into new_balance;
+  if not found then raise exception 'PLAYER_WALLET_NOT_FOUND'; end if;
+  return jsonb_build_object('success',true,'balance',new_balance,'granted',p_amount);
+end;
+$$;
+
+grant execute on function public.is_rich_click_admin() to anon,authenticated;
+grant execute on function public.admin_search_players(text) to authenticated;
+grant execute on function public.admin_grant_money(uuid,bigint) to authenticated;
+revoke all on function public.admin_search_players(text) from public,anon;
+revoke all on function public.admin_grant_money(uuid,bigint) from public,anon;
