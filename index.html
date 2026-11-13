@@ -133,7 +133,7 @@ body[data-theme="dark"] .site-modal-card input{background:#111318!important;colo
 body[data-theme="dark"] .site-modal-hint{color:#a6abb5}
 
 .profile-shell{max-width:820px!important}.profile-layout{display:grid;grid-template-columns:minmax(0,1fr) 250px;gap:18px;align-items:stretch}.profile-main{min-width:0}.profile-main input{display:block}.profile-time{margin-top:20px;padding:15px;border:1px solid var(--line);border-radius:13px;background:#f7f7f5}.title-card{padding:17px;border:1px solid #eadb83;border-radius:15px;background:linear-gradient(155deg,#fffdf2,#fff8d5);display:flex;flex-direction:column;align-items:center;text-align:center;min-width:0}.title-card-label{font-size:10px;font-weight:850;letter-spacing:1.1px;color:#8a7200}.title-emblem{width:42px;height:42px;border-radius:13px;display:grid;place-items:center;background:#ffdd2d;color:#17191d;font-size:24px;margin:13px 0 8px}.title-current{font-size:20px;font-weight:900;color:#17191d;overflow-wrap:anywhere}.title-divider{width:100%;height:1px;background:#eadb83;margin:17px 0}.title-card select{width:100%;margin-top:8px;padding:11px;border-radius:10px;border:1px solid #e4d57b;background:#fff;color:#17191d;font:inherit}.title-hint{font-size:11px;color:#77715c;line-height:1.4;margin-top:9px}body[data-theme="dark"] .profile-time{background:#15171c;border-color:#363a43}body[data-theme="dark"] .title-card{background:linear-gradient(155deg,#292719,#211f16);border-color:#786329}body[data-theme="dark"] .title-current{color:#f4f5f7}body[data-theme="dark"] .title-card-label{color:#ffdf4d}body[data-theme="dark"] .title-divider{background:#5b4e18}body[data-theme="dark"] .title-card select{background:#111318;color:#f4f5f7;border-color:#5b4e18}body[data-theme="dark"] .title-hint{color:#a6abb5}@media(max-width:620px){.profile-layout{grid-template-columns:1fr}.title-card{min-height:250px}}
-.achievement-icon img,#titleEmblem img{width:100%;height:100%;object-fit:cover;border-radius:inherit;display:block}#titleEmblem{overflow:hidden}</style>
+</style>
 </head>
 <body><div class="wrap">
 <header class="top"><div><div class="brand">RICH <span>CLICK</span></div><div class="muted">Построй империю с нуля</div></div><div class="top-actions"><button type="button" id="themeToggle" class="theme-toggle" aria-label="Включить тёмную тему" title="Включить тёмную тему"><svg class="theme-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20.2 15.3A8.7 8.7 0 0 1 8.7 3.8 8.8 8.8 0 1 0 20.2 15.3Z" fill="currentColor"/></svg><svg class="theme-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4" fill="currentColor"/><path d="M12 2v2m0 16v2M4.93 4.93l1.42 1.42m11.3 11.3 1.42 1.42M2 12h2m16 0h2M4.93 19.07l1.42-1.42m11.3-11.3 1.42-1.42" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button><div class="stats"><div class="stat"><small>БАЛАНС</small><b id="balance">$0</b><small id="incomeCollected" class="income-collected">Начислений пока нет</small></div><div class="stat"><small>ДОХОД / СЕК</small><b id="income">$0</b></div><div class="stat"><small>ЗА КЛИК</small><b id="perclick">$1</b></div></div></header>
@@ -258,19 +258,11 @@ async function findPhoto(query,fallbacks=[],excludeUrls=[]){
  })();
  carPhotoPending.set(cacheKey,task);try{return await task}finally{carPhotoPending.delete(cacheKey)}
 }
-const SHARED_CATALOG_IMAGE='./assets/shared-catalog.jpg';
-function applySharedCatalogPhotos(root){
- if(!root)return;
- root.querySelectorAll('[data-car-photo],[data-catalog-photo],[data-relic-photo]').forEach(el=>{
-  if(!el.isConnected)return;
-  const img=document.createElement('img');
-  img.className='car-photo'+(el.classList.contains('garage-photo')?' garage-photo':'');
-  img.loading='lazy';img.src=SHARED_CATALOG_IMAGE;img.alt='Общее изображение Rich Click';
-  img.onerror=()=>{const fallback=document.createElement('div');fallback.className='car-photo car-photo-loading photo-missing';fallback.textContent='ИЗОБРАЖЕНИЕ НЕДОСТУПНО';img.replaceWith(fallback)};
-  el.replaceWith(img);
- });
+function showFoundPhoto(el,photo,alt){
+ if(!photo||!el.isConnected)return;
+ const img=document.createElement('img');img.className='car-photo'+(el.classList.contains('garage-photo')?' garage-photo':'');img.loading='lazy';img.src=photo.url;img.alt=alt;img.title='Фото: '+photo.credit+' · '+photo.license;img.onerror=()=>{const fallback=document.createElement('div');fallback.className='car-photo car-photo-loading photo-missing';fallback.textContent='ФОТО НЕДОСТУПНО';img.replaceWith(fallback)};el.replaceWith(img);
+ const credit=document.createElement('div');credit.className='photo-credit';credit.textContent='Фото: '+photo.credit+' · '+photo.license;img.after(credit);
 }
-function showFoundPhoto(el,photo,alt){applySharedCatalogPhotos(el?.parentElement);}
 const catalogPhotoQueries={
  'Кофейня':['independent coffee shop street facade','specialty cafe storefront exterior'],
  'Бургерная':['hamburger restaurant storefront exterior','fast food burger restaurant building'],
@@ -307,8 +299,28 @@ const catalogPhotoQueries={
  'Умный мегаполис':['futuristic sustainable smart city skyline','modern eco city architecture concept'],
  'Лунная база':['lunar habitat research base concept architecture','moon base futuristic architecture concept']
 };
-async function loadCatalogPhotos(root,arr,kind){applySharedCatalogPhotos(root);}
-async function loadRelicPhotos(root){applySharedCatalogPhotos(root);}
+async function loadCatalogPhotos(root,arr,kind){
+ const nodes=Array.from(root.querySelectorAll('[data-catalog-photo]'));let cursor=0;
+ async function worker(){while(cursor<nodes.length){const el=nodes[cursor++],index=Number(el.dataset.catalogPhoto),item=arr[index];if(!item)continue;
+  const queries=catalogPhotoQueries[item[1]]||[item[1]+' '+item[2]+' '+(kind==='business'?'business exterior photograph':'residential property architecture photograph')];
+  const photo=await findPhoto(queries[0],queries.slice(1),[...catalogPhotoUsed]);
+  if(photo){catalogPhotoUsed.add(photo.url);showFoundPhoto(el,photo,item[1]);}
+  else{el.classList.add('photo-missing');el.textContent='ФОТО НЕ НАЙДЕНО';}
+ }}
+ await worker();
+}
+async function loadRelicPhotos(root){
+ const nodes=Array.from(root.querySelectorAll('[data-relic-photo]'));let cursor=0;
+ async function worker(){while(cursor<nodes.length){const el=nodes[cursor++],item=relics.find(x=>x[0]===el.dataset.relicPhoto);if(!item)continue;
+  const sculpture=/скульптур|роден|микеланджело|мирон|древн.*егип|античн/i.test(item[3]+' '+item[2]);
+  const query=item[2]+' '+item[3]+' '+(sculpture?'sculpture statue museum photograph':'painting artwork museum photograph');
+  const fallbacks=[item[2]+' '+(sculpture?'sculpture statue':'painting artwork'),item[3]+' '+(sculpture?'sculpture museum':'painting museum')];
+  const photo=await findPhoto(query,fallbacks,[...relicPhotoUsed]);
+  if(photo)relicPhotoUsed.add(photo.url);
+  showFoundPhoto(el,photo,item[2]);
+ }}
+ await Promise.all(Array.from({length:Math.min(4,nodes.length)},()=>worker()));
+}
 const exactCarPhotos={
  'Ferrari 812 Competizione':{
   url:'https://thumb.wikimedia.org/wikipedia/commons/thumb/0/01/Ferrari_812_Competizione.jpg/960px-Ferrari_812_Competizione.jpg',
@@ -366,7 +378,15 @@ async function findMatchingCarPhoto(name){
  }
  return null;
 }
-function loadCarPhotos(root){applySharedCatalogPhotos(root);}
+function loadCarPhotos(root){
+ const nodes=Array.from(root.querySelectorAll('[data-car-photo]'));let cursor=0;
+ async function worker(){while(cursor<nodes.length){const el=nodes[cursor++],index=Number(el.getAttribute('data-car-photo')),car=cars[index];if(!car)continue;
+  const exact=exactCarPhotos[car[1]],body=carBodyStyles[car[1]]||'car';
+  const photo=exact||await findMatchingCarPhoto(car[1]);
+  if(photo)showFoundPhoto(el,photo,car[1]+' '+body);else{el.classList.add('photo-missing');el.textContent='ФОТО ЭТОЙ МОДЕЛИ НЕ НАЙДЕНО';}
+ }}
+ Promise.all(Array.from({length:Math.min(4,nodes.length)},()=>worker()));
+}
 function cards(arr,kind,target){const baseLimit=kind==='business'?5:kind==='property'?10:3;$(target).innerHTML=arr.map((x,i)=>{let owned=s.owned[kind+':'+i]||0,inc=x[4]||0,limit=x[6]==='vintage'?1:baseLimit,full=owned>=limit;return '<article class="item">'+(kind==='cars'?'<div class="car-photo car-photo-loading" data-car-photo="'+i+'">'+x[0]+'</div>':'<div class="car-photo car-photo-loading" data-catalog-photo="'+i+'">'+x[0]+'</div>')+'<div class="row"><span class="tag">'+(kind==='cars'?'АВТОМОБИЛЬ':kind==='property'?'НЕДВИЖИМОСТЬ':'БИЗНЕС')+'</span>'+(x[6]==='vintage'?'<span class="vintage-tag">✦ ВИНТАЖ · 1 ШТ.</span>':'')+'</div><b>'+x[1]+'</b><div class="muted">'+x[2]+'</div>'+(inc?'<div class="muted">Доход: <b style="color:var(--green)">'+fmt(inc)+'/сек</b></div>':'<div class="muted">Коллекционная модель · без пассивного дохода</div>')+'<div class="price">'+fmt(x[3])+'</div><div class="muted">В собственности: '+owned+' / '+limit+'</div><button class="primary" '+(full?'disabled':'')+' onclick="buy(\''+kind+'\','+i+')">'+(full?'Лимит достигнут':'Купить')+'</button></article>'}).join('');if(kind==='cars')loadCarPhotos($(target));else loadCatalogPhotos($(target),arr,kind)}
 function renderGarage(){const owned=cars.map((x,i)=>({car:x,index:i,count:Number(s.owned['cars:'+i])||0})).filter(x=>x.count>0);$('garageTotal').textContent=owned.reduce((n,x)=>n+x.count,0)+' автомобилей';$('garageGrid').innerHTML=owned.length?owned.map(({car:x,index:i,count})=>'<article class="item"><div class="car-photo car-photo-loading garage-photo" data-car-photo="'+i+'">'+x[0]+'</div><div class="row"><span class="tag">'+(x[6]==='vintage'?'КОЛЛЕКЦИОННАЯ КЛАССИКА':'В ГАРАЖЕ')+'</span>'+(x[6]==='vintage'?'<span class="vintage-tag">✦ РЕДКИЙ ВИНТАЖ</span>':'')+'</div><b>'+x[1]+'</b><div class="muted">'+x[2]+'</div><div class="muted">Количество: '+count+'</div></article>').join(''):'<div class="empty">Гараж пока пуст. Купи первую машину в автосалоне.</div>';loadCarPhotos($('garageGrid'))}
 window.buy=buy;
@@ -426,7 +446,7 @@ function isTitleUnlocked(title){return title==='Администратор'?hasA
 function renderTitleSelector(){const select=$('titleSelect');if(!select)return;const titles=titleOptions.filter(t=>t!=='Администратор'||hasAdminTitleAccess());const signature=titles.map(t=>t+':'+(isTitleUnlocked(t)?'1':'0')).join('|');if(select.dataset.titleSignature!==signature){select.innerHTML=titles.map(t=>{const unlocked=isTitleUnlocked(t);return '<option value="'+t+'" '+(unlocked?'':'disabled')+'>' +(unlocked?'✦ ':'🔒 ')+t+(unlocked?'':' — не открыто')+'</option>'}).join('');select.dataset.titleSignature=signature;}if(!isTitleUnlocked(s.selectedTitle)&&!(s.selectedTitle==='Администратор'&&!adminCheckComplete)){s.selectedTitle='Новичок';save();}if(select.value!==(isTitleUnlocked(s.selectedTitle)?s.selectedTitle:'Новичок'))select.value=isTitleUnlocked(s.selectedTitle)?s.selectedTitle:'Новичок';}
 $('titleSelect').addEventListener('change',e=>{const chosen=e.target.value;if(!isTitleUnlocked(chosen)){e.target.value=s.selectedTitle||'Новичок';return;}s.selectedTitle=chosen;save();updateProgressPanels();if($('rating').classList.contains('active'))renderRating()});
 function formatPlaytime(seconds){const h=Math.floor(seconds/3600),m=Math.floor(seconds%3600/60);return h?h+' ч '+m+' мин':m+' мин'}
-function updateProgressPanels(){const unlocked=new Set(s.achievements||[]);let count=0;const html=achievementDefs.map(([id,name,desc,done,progress,max])=>{const isDone=unlocked.has(id)||done();if(isDone)count++;return '<div class="achievement '+(isDone?'unlocked':'locked')+'"><div class="achievement-icon" aria-hidden="true">'+'<img src="'+SHARED_CATALOG_IMAGE+'" alt="">'+'</div><div class="achievement-copy"><b>'+name+'</b><small>'+desc+'</small><small>'+(isDone?'Получено':'Прогресс: '+(max>=1000?fmt(progress()):progress())+' / '+(max>=1000?fmt(max):max))+'</small></div></div>'}).join('');if($('achievementList'))$('achievementList').innerHTML=html;if($('achievementProgress'))$('achievementProgress').textContent=count+'/'+achievementDefs.length;if($('achievementBar'))$('achievementBar').style.width=(count/achievementDefs.length*100)+'%';if($('playtimeValue'))$('playtimeValue').textContent=formatPlaytime(Number(s.playSeconds)||0);if($('playtimeSub'))$('playtimeSub').textContent=Math.floor((Number(s.playSeconds)||0)/60)+' минут в игре';if($('profileTitle'))$('profileTitle').textContent=s.selectedTitle||'Новичок';if($('titleEmblem'))$('titleEmblem').innerHTML='<img src="'+SHARED_CATALOG_IMAGE+'" alt="">';renderTitleSelector();if($('achievementPercent'))$('achievementPercent').textContent=Math.round(count/achievementDefs.length*100)+'%'}
+function updateProgressPanels(){const unlocked=new Set(s.achievements||[]);let count=0;const html=achievementDefs.map(([id,name,desc,done,progress,max])=>{const isDone=unlocked.has(id)||done();if(isDone)count++;return '<div class="achievement '+(isDone?'unlocked':'locked')+'"><div class="achievement-icon" aria-hidden="true">'+(achievementEmblems[id]||'🏅')+'</div><div class="achievement-copy"><b>'+name+'</b><small>'+desc+'</small><small>'+(isDone?'Получено':'Прогресс: '+(max>=1000?fmt(progress()):progress())+' / '+(max>=1000?fmt(max):max))+'</small></div></div>'}).join('');if($('achievementList'))$('achievementList').innerHTML=html;if($('achievementProgress'))$('achievementProgress').textContent=count+'/'+achievementDefs.length;if($('achievementBar'))$('achievementBar').style.width=(count/achievementDefs.length*100)+'%';if($('playtimeValue'))$('playtimeValue').textContent=formatPlaytime(Number(s.playSeconds)||0);if($('playtimeSub'))$('playtimeSub').textContent=Math.floor((Number(s.playSeconds)||0)/60)+' минут в игре';if($('profileTitle'))$('profileTitle').textContent=s.selectedTitle||'Новичок';if($('titleEmblem'))$('titleEmblem').textContent=titleEmblems[s.selectedTitle]||'✦';renderTitleSelector();if($('achievementPercent'))$('achievementPercent').textContent=Math.round(count/achievementDefs.length*100)+'%'}
 function checkAchievements(){s.achievements=Array.isArray(s.achievements)?s.achievements:[];let changed=false;for(const [id,name,desc,done] of achievementDefs){if(done()&&!s.achievements.includes(id)){s.achievements.push(id);changed=true;}}if(changed)save();updateProgressPanels()}
 function render(){let inc=income(),level=1+Math.floor(Math.sqrt(s.earned/1000));s.click=1+(Number(s.rebirths)||0)*0.1;$('rebirthCount').textContent=Number(s.rebirths)||0;$('rebirthMultiplier').textContent=s.click.toFixed(1)+'x';$('rebirthCost').textContent=fmt(100000*Math.pow(10,Number(s.rebirths)||0));$('rebirthButton').disabled=(Number(s.rebirths)||0)>=50||s.cash<100000*Math.pow(10,Number(s.rebirths)||0);$('balance').textContent=fmt(s.cash);$('heroBalance').textContent=fmt(s.cash);$('income').textContent=fmt(inc);$('perclick').textContent=fmt(s.click);$('clickHint').textContent='+ '+fmt(s.click)+' за нажатие';$('earned').textContent=fmt(s.earned);$('level').textContent=level;$('xpbar').style.width=(s.earned%Math.max(1,level*level*1000))/(Math.max(1,level*level*1000))*100+'%';$('assets').textContent=Object.values(s.owned||{}).reduce((a,b)=>a+(Number(b)||0),0);cards(businesses,'business','businessGrid');cards(properties,'property','propertyGrid');cards(cars,'cars','carsGrid');renderGarage();renderCollection();checkAchievements();if(document.activeElement!==$('nickname'))$('nickname').value=s.nick}
 async function renderMarket(){
