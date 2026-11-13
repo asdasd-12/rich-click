@@ -188,8 +188,8 @@ from public.player_profiles p join public.player_wallets w using(user_id);
 
 create or replace view public.relic_value_leaderboard as
 select p.user_id,p.nickname,
- coalesce(sum((r.owned_count-r.listed_count)*c.base_value),0)::bigint as collection_value,
- row_number() over(order by coalesce(sum((r.owned_count-r.listed_count)*c.base_value),0) desc,p.created_at asc) as rank
+ coalesce(sum(r.owned_count*c.base_value),0)::bigint as collection_value,
+ row_number() over(order by coalesce(sum(r.owned_count*c.base_value),0) desc,p.created_at asc) as rank
 from public.player_profiles p
 left join public.player_relics r on r.user_id=p.user_id
 left join public.relic_catalog c on c.id=r.relic_id
