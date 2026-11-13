@@ -153,6 +153,24 @@ body[data-theme="dark"] .site-modal-hint{color:#a6abb5}
 .car-photo{background:#f7f7f3;border:1px solid #e8e9e3;object-fit:contain;padding:5px}
 body[data-theme="dark"] .car-photo{background:#202228;border-color:#343740}
 .photo-credit{display:none!important}
+
+/* iOS-style in-site notifications */
+#notificationDock{position:fixed;right:18px;bottom:18px;z-index:12000;display:flex;flex-direction:column;align-items:flex-end;gap:10px;pointer-events:none}
+#notificationBell{pointer-events:auto;width:52px;height:52px;border:1px solid #e7d77c;border-radius:18px;background:linear-gradient(145deg,#fff8cf,#ffdd2d);color:#17191d;box-shadow:0 8px 26px #0002;font-size:21px;position:relative}
+#notificationCount{position:absolute;right:-5px;top:-5px;min-width:19px;height:19px;padding:0 5px;border-radius:12px;background:#e5484d;color:white;font-size:11px;display:grid;place-items:center;border:2px solid #fff}
+#notificationPanel{pointer-events:auto;width:min(360px,calc(100vw - 28px));max-height:min(55vh,420px);overflow:auto;padding:13px;background:#f7f7f8;color:#17191d;border:1px solid #e5e7eb;border-radius:18px;box-shadow:0 15px 50px #0003}
+#notificationPanel[hidden]{display:none}
+.notification-entry{padding:11px 12px;border-radius:13px;background:#fff;border:1px solid #e9eaed;margin-top:8px;font-size:13px;overflow-wrap:anywhere}
+.notification-entry small{display:block;color:#858a94;margin-top:4px;font-size:10px}
+#notificationToast{pointer-events:none;position:fixed;z-index:12001;top:max(12px,env(safe-area-inset-top));left:50%;transform:translate(-50%,-18px);opacity:0;width:min(430px,calc(100vw - 24px));padding:13px 15px 13px 48px;border:1px solid #ffffffa8;border-radius:17px;background:linear-gradient(145deg,#ffffffef,#f4f5f7ef);color:#17191d;box-shadow:0 12px 38px #0002;backdrop-filter:blur(22px);transition:opacity .22s,transform .22s}
+#notificationToast:before{content:"R";position:absolute;left:13px;top:13px;width:26px;height:26px;border-radius:8px;display:grid;place-items:center;background:#ffdd2d;font-weight:950}
+#notificationToast.show{opacity:1;transform:translate(-50%,0)}
+#notificationToast b{display:block;font-size:13px;margin-bottom:2px}
+#notificationToast span{font-size:13px;line-height:1.35;display:block}
+body[data-theme="dark"] #notificationPanel{background:#1b1d22;color:#f4f5f7;border-color:#363a43}
+body[data-theme="dark"] .notification-entry{background:#252830;border-color:#3a3e48}
+@media(max-width:520px){#notificationDock{right:12px;bottom:calc(12px + env(safe-area-inset-bottom))}#notificationBell{width:48px;height:48px;border-radius:16px}#notificationToast{top:max(8px,env(safe-area-inset-top))}}
+
 </style>
 </head>
 <body><div class="wrap">
@@ -195,6 +213,13 @@ body[data-theme="dark"] .car-photo{background:#202228;border-color:#343740}
   <div class="row site-modal-actions"><button type="button" data-listing-close>Отмена</button><button type="button" class="primary" id="listingSubmit">Выставить</button></div>
  </section>
 </div>
+
+<div id="notificationToast" role="status" aria-live="polite"><b id="notificationToastTitle">Rich Click</b><span id="notificationToastText"></span></div>
+<div id="notificationDock">
+ <section id="notificationPanel" hidden><div class="row"><b>Уведомления</b><button type="button" id="notificationClear" style="padding:5px 9px;font-size:11px">Очистить</button></div><div id="notificationList"><div class="muted" style="padding:12px 2px">Пока уведомлений нет.</div></div></section>
+ <button type="button" id="notificationBell" aria-label="Открыть уведомления" title="Уведомления">♢<span id="notificationCount" hidden>0</span></button>
+</div>
+
 <footer>RICH CLICK · Виртуальная игровая экономика · Не реальные деньги</footer></div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
@@ -202,6 +227,26 @@ const SUPABASE_URL="https://mpjrgurjmdueccaupkwu.supabase.co";
 const SUPABASE_KEY="sb_publishable_XKU8Wy6tS8s6t0QHcuzXrw_AEFa9MZx";
 const sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true,flowType:'pkce'}});
 const $=id=>document.getElementById(id);
+
+const notificationHistory=[];
+let notificationTimer=null;
+function renderNotifications(){
+ const list=$('notificationList'),count=$('notificationCount');
+ if(!list||!count)return;
+ list.replaceChildren();
+ if(!notificationHistory.length){const empty=document.createElement('div');empty.className='muted';empty.style.padding='12px 2px';empty.textContent='Пока уведомлений нет.';list.append(empty);}
+ notificationHistory.slice().reverse().forEach(item=>{const row=document.createElement('div');row.className='notification-entry';const title=document.createElement('b');title.textContent=item.title;const message=document.createElement('div');message.textContent=item.message;const time=document.createElement('small');time.textContent=item.time;row.append(title,message,time);list.append(row);});
+ count.textContent=String(notificationHistory.length);count.hidden=!notificationHistory.length;
+}
+function notify(message,title='Rich Click'){
+ const text=String(message??'');notificationHistory.push({title:String(title),message:text,time:new Date().toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'})});
+ if(notificationHistory.length>40)notificationHistory.shift();
+ renderNotifications();
+ const toast=$('notificationToast');if(toast){$('notificationToastTitle').textContent=title;$('notificationToastText').textContent=text;toast.classList.add('show');if(notificationTimer)clearTimeout(notificationTimer);notificationTimer=setTimeout(()=>toast.classList.remove('show'),3600);}
+}
+$('notificationBell').addEventListener('click',()=>{$('notificationPanel').hidden=!$('notificationPanel').hidden;});
+$('notificationClear').addEventListener('click',()=>{notificationHistory.length=0;renderNotifications();});
+
 function fmt(value){
  const n=Number(value)||0, abs=Math.abs(n), sign=n<0?'-':'';
  const units=[[1e15,'квадрлн'],[1e12,'трлн'],[1e9,'млрд'],[1e6,'млн'],[1e3,'тыс']];
@@ -228,7 +273,7 @@ async function addCash(n){
  const {data:{session}}=await sb.auth.getSession();
  if(session){
   const {data,error}=await sb.rpc('earn_click',{p_amount:1});
-  if(error){if(!error.message.includes('CLICK_TOO_FAST'))alert('Не удалось начислить деньги: '+error.message);return;}
+  if(error){if(!error.message.includes('CLICK_TOO_FAST'))notify('Не удалось начислить деньги: '+error.message);return;}
   s.cash=Number(data.balance);s.earned=Math.max(s.earned,Number(data.earned));if(data.rebirths!==undefined)s.rebirths=Number(data.rebirths)||0;save();render();return;
  }
  s.cash+=n;s.earned+=n;save();render();
@@ -238,8 +283,8 @@ $('nav').addEventListener('click',e=>{let b=e.target.closest('button[data-page]'
 
 window.showPage=showPage;
 $('clicker').onclick=()=>addCash(s.click);
-$('rebirthButton').onclick=async()=>{const {data:{session}}=await sb.auth.getSession();let count=Number(s.rebirths)||0;let balance=Number(s.cash)||0;if(session){const {data:wallet,error:walletError}=await sb.from('player_wallets').select('balance,rebirths,lifetime_earned').eq('user_id',session.user.id).maybeSingle();if(walletError)return alert('Не удалось проверить баланс: '+walletError.message);if(!wallet)return alert('Игровой кошелёк не найден. Перезайди в аккаунт и попробуй снова.');balance=Number(wallet.balance)||0;count=Number(wallet.rebirths)||0;s.cash=balance;s.rebirths=count;s.earned=Number(wallet.lifetime_earned)||0;save();render();}if(count>=50)return;const cost=10000000*Math.pow(10,count);if(balance<cost)return alert('Недостаточно средств на серверном балансе. Сейчас: '+fmt(balance)+'. Нужно: '+fmt(cost)+'. Обнови игру после получения дохода.');if(!confirm('Переродиться за '+fmt(cost)+'? Баланс и заработок обнулятся. Множитель клика и пассивного дохода станет '+(count+2).toFixed(1)+'x.'))return;if(session){const {data,error}=await sb.rpc('purchase_rebirth');if(error){if(error.message.includes('INSUFFICIENT_FUNDS')){const {data:latest}=await sb.from('player_wallets').select('balance,rebirths,lifetime_earned').eq('user_id',session.user.id).maybeSingle();if(latest){s.cash=Number(latest.balance)||0;s.rebirths=Number(latest.rebirths)||0;s.earned=Number(latest.lifetime_earned)||0;save();render();return alert('Баланс на сервере изменился. Сейчас: '+fmt(s.cash)+', требуется: '+fmt(10000000*Math.pow(10,s.rebirths))+'.');}}return alert('Перерождение не удалось: '+error.message);}s.cash=Number(data.balance);s.earned=0;s.rebirths=Number(data.rebirths);save();render();return;}s.cash-=cost;s.earned=0;s.rebirths=count+1;save();render();};
-async function buy(kind,i){let arr=kind==='business'?businesses:kind==='property'?properties:cars,item=arr[i],cost=item[3],key=kind+':'+i,limit=arr[i][6]==='vintage'?1:kind==='business'?5:kind==='property'?10:3,owned=Number(s.owned[key])||0;if(owned>=limit)return alert('Лимит владения этим объектом: '+limit+' шт.');const {data:{session}}=await sb.auth.getSession();if(session){const {data,error}=await sb.rpc('purchase_asset',{p_asset_key:key});if(error)return alert(error.message.includes('ASSET_LIMIT_REACHED')?'Достигнут лимит: '+limit+' шт. этого объекта.':'Покупка не прошла: '+error.message);s.cash=Number(data.balance);s.owned[key]=Number(data.quantity);save();render();return;}if(s.cash<cost)return alert('Не хватает денег!');s.cash-=cost;s.owned[key]=owned+1;save();render()}
+$('rebirthButton').onclick=async()=>{const {data:{session}}=await sb.auth.getSession();let count=Number(s.rebirths)||0;let balance=Number(s.cash)||0;if(session){const {data:wallet,error:walletError}=await sb.from('player_wallets').select('balance,rebirths,lifetime_earned').eq('user_id',session.user.id).maybeSingle();if(walletError)return notify('Не удалось проверить баланс: '+walletError.message);if(!wallet)return notify('Игровой кошелёк не найден. Перезайди в аккаунт и попробуй снова.');balance=Number(wallet.balance)||0;count=Number(wallet.rebirths)||0;s.cash=balance;s.rebirths=count;s.earned=Number(wallet.lifetime_earned)||0;save();render();}if(count>=50)return;const cost=10000000*Math.pow(10,count);if(balance<cost)return notify('Недостаточно средств на серверном балансе. Сейчас: '+fmt(balance)+'. Нужно: '+fmt(cost)+'. Обнови игру после получения дохода.');if(!confirm('Переродиться за '+fmt(cost)+'? Баланс и заработок обнулятся. Множитель клика и пассивного дохода станет '+(count+2).toFixed(1)+'x.'))return;if(session){const {data,error}=await sb.rpc('purchase_rebirth');if(error){if(error.message.includes('INSUFFICIENT_FUNDS')){const {data:latest}=await sb.from('player_wallets').select('balance,rebirths,lifetime_earned').eq('user_id',session.user.id).maybeSingle();if(latest){s.cash=Number(latest.balance)||0;s.rebirths=Number(latest.rebirths)||0;s.earned=Number(latest.lifetime_earned)||0;save();render();return notify('Баланс на сервере изменился. Сейчас: '+fmt(s.cash)+', требуется: '+fmt(10000000*Math.pow(10,s.rebirths))+'.');}}return notify('Перерождение не удалось: '+error.message);}s.cash=Number(data.balance);s.earned=0;s.rebirths=Number(data.rebirths);save();render();return;}s.cash-=cost;s.earned=0;s.rebirths=count+1;save();render();};
+async function buy(kind,i){let arr=kind==='business'?businesses:kind==='property'?properties:cars,item=arr[i],cost=item[3],key=kind+':'+i,limit=arr[i][6]==='vintage'?1:kind==='business'?5:kind==='property'?10:3,owned=Number(s.owned[key])||0;if(owned>=limit)return notify('Лимит владения этим объектом: '+limit+' шт.');const {data:{session}}=await sb.auth.getSession();if(session){const {data,error}=await sb.rpc('purchase_asset',{p_asset_key:key});if(error)return notify(error.message.includes('ASSET_LIMIT_REACHED')?'Достигнут лимит: '+limit+' шт. этого объекта.':'Покупка не прошла: '+error.message);s.cash=Number(data.balance);s.owned[key]=Number(data.quantity);save();render();return;}if(s.cash<cost)return notify('Не хватает денег!');s.cash-=cost;s.owned[key]=owned+1;save();render()}
 function makeGeneratedArtwork(item,kind,index){
  const name=String(item?.[1]||item?.[2]||'Объект');
  const desc=String(item?.[2]||'');
@@ -372,26 +417,26 @@ window.revealShopGift=id=>{const key='shop:'+id;if(!s.relicRevealed.includes(key
 window.hideShopGift=id=>{s.relicRevealed=s.relicRevealed.filter(x=>x!=='shop:'+id);save();renderShop()};
 window.revealCollectionGift=index=>{const key='collection:'+index;if(!s.relicRevealed.includes(key))s.relicRevealed.push(key);save();renderCollection()};
 window.hideCollectionGift=index=>{s.relicRevealed=s.relicRevealed.filter(x=>x!=='collection:'+index);save();renderCollection()};
-$('upgradeLuck').onclick=async()=>{const {data:{session}}=await sb.auth.getSession();if(session){const {data,error}=await sb.rpc('purchase_luck_upgrade');if(error)return alert('Не удалось улучшить удачу: '+error.message);s.cash=Number(data.balance);s.luck=Number(data.luck_level);s.luckCost=Number(data.luck_cost);save();renderShop();render();return;}if(s.cash<s.luckCost)return alert('Не хватает денег!');s.cash-=s.luckCost;s.luck++;s.luckCost*=10;save();renderShop();render()};
+$('upgradeLuck').onclick=async()=>{const {data:{session}}=await sb.auth.getSession();if(session){const {data,error}=await sb.rpc('purchase_luck_upgrade');if(error)return notify('Не удалось улучшить удачу: '+error.message);s.cash=Number(data.balance);s.luck=Number(data.luck_level);s.luckCost=Number(data.luck_cost);save();renderShop();render();return;}if(s.cash<s.luckCost)return notify('Не хватает денег!');s.cash-=s.luckCost;s.luck++;s.luckCost*=10;save();renderShop();render()};
 window.buyRelic=async function(id){
  const item=relics.find(x=>x[0]===id);
- if(!item)return alert('Предмет не найден.');
+ if(!item)return notify('Предмет не найден.');
  const count=s.relicPurchases[id]||0;
- if(count>=3)return alert('Лимит покупки этой редкости — 3 экземпляра.');
+ if(count>=3)return notify('Лимит покупки этой редкости — 3 экземпляра.');
  const {data:{session}}=await sb.auth.getSession();
  if(session){
   const {data,error}=await sb.rpc('purchase_relic',{p_relic_id:id});
-  if(error)return alert('Покупка не прошла: '+error.message);
+  if(error)return notify('Покупка не прошла: '+error.message);
   s.cash=Number(data.remaining_balance);
   s.relicPurchases[id]=count+1;
   s.collection.push(id);
   save();render();renderShop();await renderMarket();await renderRating();
-  return alert('Покупка успешна! Предмет сохранён в аккаунте.');
+  return notify('Покупка успешна! Предмет сохранён в аккаунте.');
  }
- if(s.cash<item[5])return alert('Не хватает денег!');
+ if(s.cash<item[5])return notify('Не хватает денег!');
  s.cash-=item[5];s.relicPurchases[id]=count+1;s.collection.push(id);
  save();render();renderShop();
- alert('Покупка успешна! Предмет добавлен в локальную коллекцию.');
+ notify('Покупка успешна! Предмет добавлен в локальную коллекцию.');
 };
 
 async function syncCloudCollection(){
@@ -447,8 +492,8 @@ async function renderMarket(){
  listEl.innerHTML=listings.length?listings.map(x=>{const r=relics.find(z=>z[0]===x.relic_id);if(!r)return '';const mine=x.seller_id===session.user.id;return '<article class="item"><div class="car-photo car-photo-loading" data-relic-photo="'+r[0]+'">'+r[1]+'</div><div class="tag rarity-'+r[4]+'">'+rarityName[r[4]]+'</div><b>'+r[2]+'</b><div class="muted">Количество: '+x.quantity+'</div><div class="price">'+fmt(x.unit_price)+' за штуку</div><div class="muted">Итого: '+fmt(x.unit_price*x.quantity)+'</div><button class="'+(mine?'':'primary')+'" onclick="'+(mine?'cancelListing':'buyListing')+'(\''+x.id+'\')">'+(mine?'Снять объявление':'Купить')+'</button></article>'}).join(''):'<div class="empty">Пока нет активных объявлений.</div>';loadRelicPhotos(listEl);
 }
 window.listRelic=async(id,max)=>{const relic=relics.find(x=>x[0]===id);if(!relic)return;const modal=$('listingModal');modal.dataset.relicId=id;$('listingTitle').textContent='Выставить на биржу';$('listingRelicName').textContent=relic[2];$('listingQuantity').max=String(max);$('listingQuantity').value='1';$('listingQuantityHint').textContent='Доступно предметов: '+max;$('listingPrice').value=String(relic[5]);$('listingError').textContent='';modal.hidden=false;$('listingQuantity').focus();};
-window.buyListing=async(id)=>{if(!confirm('Купить это предложение?'))return;const {error}=await sb.rpc('buy_relic_listing',{p_listing_id:id});if(error)alert('Покупка не прошла: '+error.message);await renderMarket();await renderRating()};
-window.cancelListing=async(id)=>{if(!confirm('Снять объявление с биржи?'))return;const {error}=await sb.rpc('cancel_relic_listing',{p_listing_id:id});if(error)alert('Не удалось снять: '+error.message);await renderMarket()};
+window.buyListing=async(id)=>{if(!confirm('Купить это предложение?'))return;const {error}=await sb.rpc('buy_relic_listing',{p_listing_id:id});if(error)notify('Покупка не прошла: '+error.message);await renderMarket();await renderRating()};
+window.cancelListing=async(id)=>{if(!confirm('Снять объявление с биржи?'))return;const {error}=await sb.rpc('cancel_relic_listing',{p_listing_id:id});if(error)notify('Не удалось снять: '+error.message);await renderMarket()};
 $('refreshMarket').onclick=renderMarket;
 function titleForBalance(value){const n=Number(value)||0;const tiers=[[1e15,'Легенда'],[1e12,'Триллионер'],[1e9,'Миллиардер'],[1e6,'Миллионер'],[1e4,'Предприниматель']];return (tiers.find(t=>n>=t[0])||[0,'Новичок'])[1]}
 async function renderRating(){const [b,r]=await Promise.all([sb.from('balance_leaderboard').select('nickname,balance,rank').order('rank').limit(100),sb.from('relic_value_leaderboard').select('nickname,collection_value,rank').order('rank').limit(100)]);const draw=(el,data,field,withTitle=false)=>{if(data.error){$(el).innerHTML='<div class="muted">Не удалось загрузить рейтинг. Проверьте, выполнен ли SQL из supabase/schema.sql.</div>';return;}$(el).innerHTML='<div class="leader"><b>#</b><b>Игрок</b><b>Стоимость</b></div>'+(data.data||[]).map(x=>'<div class="leader"><b>'+x.rank+'</b><div><b>'+escapeHtml(x.nickname)+'</b>'+(withTitle?'<br><span class="rank-title">'+(String(x.nickname).toLowerCase()===String(s.nick).toLowerCase()?(s.selectedTitle||titleForBalance(x.balance)):titleForBalance(x.balance))+'</span>':'')+'</div><b>'+fmt(x[field])+'</b></div>').join('')||'<div class="empty">Пока нет игроков.</div>'};draw('balanceLeaderboard',b,'balance',true);draw('relicLeaderboard',r,'collection_value')}
@@ -544,7 +589,7 @@ $('logsRefresh').onclick=loadAdminLogs;
 $('githubLogin').onclick=async()=>{const button=$('githubLogin');button.disabled=true;button.textContent='Переход к GitHub…';$('authStatus').textContent='Подключаем GitHub. Не закрывай страницу…';try{const redirectTo=location.origin+'/rich-click/';const {data,error}=await sb.auth.signInWithOAuth({provider:'github',options:{redirectTo,skipBrowserRedirect:false,queryParams:{allow_signup:'true'}}});if(error)throw error;if(data?.url)location.assign(data.url);}catch(error){$('authStatus').textContent='Не удалось начать вход: '+(error.message||String(error));button.disabled=false;button.textContent='Войти через GitHub';console.error('GitHub OAuth error:',error);}};
 $('githubLogout').onclick=async()=>{const button=$('githubLogout');button.disabled=true;const {error}=await sb.auth.signOut();button.disabled=false;if(error){$('authStatus').textContent='Ошибка выхода: '+error.message;return;}cloudMode=false;s.luck=0;s.luckCost=1000000;s.rebirths=0;save();await refreshAuth();renderShop();render();renderRating()};
 sb.auth.onAuthStateChange(()=>{setTimeout(()=>{refreshAuth();renderRating()},0)});
-$('saveNick').onclick=async()=>{let v=$('nickname').value.trim();if(!v)return alert('Введи ник.');if(v.length>18)return alert('Ник должен быть не длиннее 18 символов.');const {data:{session}}=await sb.auth.getSession();if(session){const {data,error}=await sb.from('player_profiles').update({nickname:v}).eq('user_id',session.user.id).select('nickname').maybeSingle();if(error)return alert('Не удалось изменить ник в аккаунте: '+error.message);if(!data)return alert('Профиль игрока не найден в базе. Выйди из аккаунта и войди снова.');}s.nick=v;save();$('nickname').value=s.nick;render();await renderRating();alert('Ник успешно сохранён!')};
+$('saveNick').onclick=async()=>{let v=$('nickname').value.trim();if(!v)return notify('Введи ник.');if(v.length>18)return notify('Ник должен быть не длиннее 18 символов.');const {data:{session}}=await sb.auth.getSession();if(session){const {data,error}=await sb.from('player_profiles').update({nickname:v}).eq('user_id',session.user.id).select('nickname').maybeSingle();if(error)return notify('Не удалось изменить ник в аккаунте: '+error.message);if(!data)return notify('Профиль игрока не найден в базе. Выйди из аккаунта и войди снова.');}s.nick=v;save();$('nickname').value=s.nick;render();await renderRating();notify('Ник успешно сохранён!')};
 $('reset').onclick=()=>{if(confirm('Точно сбросить весь прогресс?')){const lifetime={playSeconds:Number(s.playSeconds)||0,achievements:Array.isArray(s.achievements)?s.achievements:[]};s={...defaultState(),...lifetime};save();render();renderShop()}};
 
 document.querySelectorAll('[data-listing-close]').forEach(el=>el.addEventListener('click',()=>$('listingModal').hidden=true));
