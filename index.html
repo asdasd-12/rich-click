@@ -317,12 +317,54 @@ async function loadCatalogPhotos(root,arr,kind){
  }}
  await Promise.all(Array.from({length:Math.min(4,nodes.length)},()=>worker()));
 }
+const relicPhotoSearch={
+ mona:['Mona Lisa Leonardo da Vinci painting','La Gioconda painting Louvre'],
+ venus:['Venus de Milo statue Louvre','Aphrodite of Milos sculpture'],
+ victory:['Winged Victory of Samothrace statue','Nike of Samothrace Louvre'],
+ thinker:['The Thinker Auguste Rodin sculpture','Rodin Le Penseur bronze'],
+ pearl:['Girl with a Pearl Earring Johannes Vermeer painting'],
+ starry:['The Starry Night Vincent van Gogh painting'],
+ lace:['The Lacemaker Johannes Vermeer painting'],
+ astronomer:['The Astronomer Vermeer painting Louvre'],
+ scribe:['Seated Scribe ancient Egypt statue Louvre'],
+ liberty:['Liberty Leading the People Eugene Delacroix painting'],
+ psyche:['Psyche Revived by Cupids Kiss Antonio Canova sculpture'],
+ hammurabi:['Code of Hammurabi stele Louvre'],
+ david:['David Michelangelo marble statue Florence'],
+ thinker2:['The Poet Auguste Rodin sculpture'],
+ waterlilies:['Water Lilies Claude Monet painting'],
+ scream:['The Scream Edvard Munch painting'],
+ guernica:['Guernica Pablo Picasso painting'],
+ nightwatch:['The Night Watch Rembrandt painting'],
+ creation:['The Creation of Adam Michelangelo Sistine Chapel'],
+ birthvenus:['The Birth of Venus Sandro Botticelli painting'],
+ sunflowers:['Sunflowers Vincent van Gogh painting'],
+ girlred:['portrait woman red dress oil painting museum'],
+ terracotta:['Terracotta Army Qin dynasty warriors museum'],
+ mask:['Tutankhamun golden funerary mask Egypt museum'],
+ crown:['imperial crown royal regalia museum'],
+ apollo:['Apollo Belvedere ancient Roman sculpture'],
+ discobolus:['Discobolus Myron ancient Greek sculpture'],
+ laocoon:['Laocoon and His Sons sculpture Vatican'],
+ mona2:['Virgin of the Rocks Leonardo da Vinci painting'],
+ lastsupper:['The Last Supper Leonardo da Vinci mural'],
+ persistence:['The Persistence of Memory Salvador Dali painting'],
+ american_gothic:['American Gothic Grant Wood painting'],
+ girl_vermeer:['A Lady Writing Johannes Vermeer painting'],
+ ivory_chess:['medieval ivory chess pieces historical museum'],
+ jade_dragon:['ancient Chinese jade dragon artifact museum'],
+ pharaoh_mask:['ancient Egyptian pharaoh funerary mask museum'],
+ royal_scepter:['royal ceremonial scepter historical museum'],
+ blue_diamond:['Hope Diamond blue diamond Smithsonian'],
+ golden_fleece:['Golden Fleece mythological ancient Greek artifact'],
+ ancient_map:['antique historical world map museum']
+};
 async function loadRelicPhotos(root){
  const nodes=Array.from(root.querySelectorAll('[data-relic-photo]'));let cursor=0;
  async function worker(){while(cursor<nodes.length){const el=nodes[cursor++],item=relics.find(x=>x[0]===el.dataset.relicPhoto);if(!item)continue;
-  const sculpture=/скульптур|роден|микеланджело|мирон|древн.*егип|античн/i.test(item[3]+' '+item[2]);
-  const query=item[2]+' '+item[3]+' '+(sculpture?'sculpture statue museum photograph':'painting artwork museum photograph');
-  const fallbacks=[item[2]+' '+(sculpture?'sculpture statue':'painting artwork'),item[3]+' '+(sculpture?'sculpture museum':'painting museum')];
+  const searches=relicPhotoSearch[item[0]]||[];
+  const query=searches[0]||'';
+  const fallbacks=searches.slice(1);
   let photo=null;
   for(let attempt=0;attempt<4;attempt++){
    photo=await findPhoto(query,fallbacks,[...relicPhotoUsed]);
@@ -331,7 +373,7 @@ async function loadRelicPhotos(root){
    relicPhotoUsed.add(photo.url);break;
   }
   if(photo)showFoundPhoto(el,photo,item[2]);
-  else{el.classList.add('photo-missing');el.textContent='ФОТО НЕ НАЙДЕНО';}
+  else{el.classList.add('photo-missing');el.textContent='ФОТО ИМЕННО ЭТОГО ЭКСПОНАТА НЕ НАЙДЕНО';}
  }}
  await Promise.all(Array.from({length:Math.min(4,nodes.length)},()=>worker()));
 }
