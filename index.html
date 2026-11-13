@@ -231,8 +231,8 @@ async function findPhoto(query,fallbacks=[],excludeUrls=[]){
    const terms=[...new Set([query,...fallbacks,query.split(/\s+/).slice(0,3).join(' ')].filter(Boolean))];
    for(const term of terms){
     const api='https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrsearch='+encodeURIComponent('filetype:bitmap '+term)+'&gsrnamespace=6&gsrlimit=30&prop=imageinfo&iiprop=url|extmetadata|size&iiurlwidth=1100&format=json&origin=*';
-    const response=await fetch(api);if(!response.ok)continue;
-    const data=await response.json(),pages=Object.values(data.query?.pages||{});
+    let response=null,data=null;for(let retry=0;retry<3;retry++){try{const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),12000);response=await fetch(api,{signal:controller.signal,cache:'no-store'});clearTimeout(timer);if(response.ok){data=await response.json();break;}}catch(error){}if(retry<2)await new Promise(resolve=>setTimeout(resolve,500*(retry+1)));}if(!response?.ok||!data)continue;
+    const pages=Object.values(data.query?.pages||{});
     const bad=/(logo|emblem|badge|icon|flag|coat of arms|toy|die.?cast|hot wheels|miniature|scale model|brochure|poster|drawing|diagram|wheel rim)/i;
     const ignored=['car','cars','photo','photograph','automobile','vehicle','model','picture','exterior','street','facade','building','photograph','aerial','view','modern','large','luxury','residential','commercial','independent','specialty'];
     const words=term.toLowerCase().replace(/[^a-z0-9]+/g,' ').split(/\s+/).filter(w=>w.length>2&&!ignored.includes(w));
@@ -260,7 +260,10 @@ async function findPhoto(query,fallbacks=[],excludeUrls=[]){
 }
 function showFoundPhoto(el,photo,alt){
  if(!photo||!el.isConnected)return;
- const img=document.createElement('img');img.className='car-photo'+(el.classList.contains('garage-photo')?' garage-photo':'');img.loading='lazy';img.src=photo.url;img.alt=alt;img.title='Фото: '+photo.credit+' · '+photo.license;img.onerror=()=>{const fallback=document.createElement('div');fallback.className='car-photo car-photo-loading photo-missing';fallback.textContent='ФОТО НЕДОСТУПНО';const credit=img.nextElementSibling;if(credit?.classList.contains('photo-credit'))credit.remove();img.replaceWith(fallback)};el.replaceWith(img);
+ const img=document.createElement('img');img.className='car-photo'+(el.classList.contains('garage-photo')?' garage-photo':'');img.loading='lazy';img.decoding='async';img.referrerPolicy='no-referrer';img.alt=alt;img.title='Фото: '+photo.credit+' · '+photo.license;
+ let tries=0;const urls=[photo.url,photo.url.replace('https://thumb.wikimedia.org/','https://upload.wikimedia.org/'),photo.url.replace('https://upload.wikimedia.org/','https://thumb.wikimedia.org/')].filter((url,i,a)=>url&&a.indexOf(url)===i);
+ img.onerror=()=>{tries++;if(tries<urls.length){img.src=urls[tries];return;}const fallback=document.createElement('div');fallback.className='car-photo car-photo-loading photo-missing';fallback.textContent='ФОТО ВРЕМЕННО НЕДОСТУПНО';const credit=img.nextElementSibling;if(credit?.classList.contains('photo-credit'))credit.remove();img.replaceWith(fallback)};
+ img.src=urls[0];el.replaceWith(img);
  const credit=document.createElement('div');credit.className='photo-credit';credit.textContent='Фото: '+photo.credit+' · '+photo.license;img.after(credit);
 }
 const catalogPhotoQueries={
@@ -419,8 +422,8 @@ async function findMatchingCarPhoto(name){
  for(const term of searches){
   try{
    const api='https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrsearch='+encodeURIComponent('filetype:bitmap '+term)+'&gsrnamespace=6&gsrlimit=50&prop=imageinfo&iiprop=url|extmetadata|size&iiurlwidth=1100&format=json&origin=*';
-   const response=await fetch(api);if(!response.ok)continue;
-   const pages=Object.values((await response.json()).query?.pages||{});
+   let response=null,data=null;for(let retry=0;retry<3;retry++){try{const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),12000);response=await fetch(api,{signal:controller.signal,cache:'no-store'});clearTimeout(timer);if(response.ok){data=await response.json();break;}}catch(error){}if(retry<2)await new Promise(resolve=>setTimeout(resolve,500*(retry+1)));}if(!response?.ok||!data)continue;
+    const pages=Object.values(data.query?.pages||{});
    const bad=/(logo|emblem|badge|icon|flag|toy|die.?cast|hot wheels|miniature|scale model|brochure|poster|drawing|diagram|wheel rim)/i;
    const matches=pages.filter(p=>{
     const title=(p.title||'').toLowerCase().replace(/mercedes[- ]benz/g,'mercedes').replace(/[^a-z0-9]+/g,' ');
