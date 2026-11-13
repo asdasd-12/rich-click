@@ -235,3 +235,24 @@ $$;
 grant execute on function public.earn_click(bigint) to authenticated;
 revoke all on function public.earn_click(bigint) from public, anon;
 
+
+
+-- Persistent assets and server-calculated passive income.
+create table if not exists public.asset_catalog (asset_key text primary key,category text not null check(category in ('business','property','cars')),name text not null,price bigint not null check(price>0),income_per_second bigint not null default 0 check(income_per_second>=0));
+insert into public.asset_catalog(asset_key,category,name,price,income_per_second) values
+('business:0','business','Кофейня',250,3),('business:1','business','Бургерная',1200,18),('business:2','business','Супермаркет',6500,95),('business:3','business','Отель',28000,430),('business:4','business','Завод',145000,2300),('business:5','business','Космопорт',900000,16000),
+('property:0','property','Студия',80000,650),('property:1','property','Пентхаус',650000,5200),('property:2','property','Жилой комплекс',4200000,36000),('property:3','property','Частный остров',32000000,310000),
+('cars:0','cars','Merchedes Binz C-Class',12000,0),('cars:1','cars','Porshe 911 Carrera',95000,0),('cars:2','cars','Bavarian M5',180000,0),('cars:3','cars','Lamborgini Aventor',850000,0),('cars:4','cars','Ferrary SF90 Stradale',2400000,0)
+on conflict(asset_key) do update set category=excluded.category,name=excluded.name,price=excluded.price,income_per_second=excluded.income_per_second;
+create table if not exists public.player_assets(user_id uuid not null references auth.users(id) on delete cascade,asset_key text not null references public.asset_catalog(asset_key),quantity integer not null default 0 check(quantity>=0),primary key(user_id,asset_key));
+alter table public.player_assets enable row level security;
+drop policy if exists "Players read own assets" on public.player_assets;
+create policy "Players read own assets" on public.player_assets for select using(auth.uid()=user_id);
+alter table public.player_wallets add column if not exists last_income_at timestamptz not null default now();
+create or replace function public.purchase_asset(p_asset_key text) returns jsonb language plpgsql security definer set search_path=public as $$
+declare uid uuid:=auth.uid(); a public.asset_catalog%rowtype; w public.player_wallets%rowtype; qty integer;
+begin if uid is null then raise exception 'AUTH_REQUIRED'; end if; select * into a from public.asset_catalog where asset_key=p_asset_key; if not found then raise exception 'ASSET_NOT_FOUND'; end if; select * into w from public.player_wallets where user_id=uid for update; if not found then raise exception 'WALLET_NOT_FOUND'; end if; if w.balance<a.price then raise exception 'NOT_ENOUGH_BALANCE'; end if; update public.player_wallets set balance=balance-a.price,updated_at=now() where user_id=uid; insert into public.player_assets(user_id,asset_key,quantity) values(uid,p_asset_key,1) on conflict(user_id,asset_key) do update set quantity=public.player_assets.quantity+1 returning quantity into qty; return jsonb_build_object('success',true,'balance',w.balance-a.price,'quantity',qty); end; $$;
+create or replace function public.collect_passive_income() returns jsonb language plpgsql security definer set search_path=public as $$
+declare uid uuid:=auth.uid(); w public.player_wallets%rowtype; inc bigint; elapsed numeric; reward bigint;
+begin if uid is null then raise exception 'AUTH_REQUIRED'; end if; select * into w from public.player_wallets where user_id=uid for update; if not found then raise exception 'WALLET_NOT_FOUND'; end if; select coalesce(sum(a.income_per_second*p.quantity),0)::bigint into inc from public.player_assets p join public.asset_catalog a using(asset_key) where p.user_id=uid; elapsed:=greatest(0,least(extract(epoch from(now()-w.last_income_at)),86400)); reward:=floor(elapsed*inc)::bigint; update public.player_wallets set balance=balance+reward,lifetime_earned=lifetime_earned+reward,last_income_at=now(),updated_at=now() where user_id=uid returning * into w; return jsonb_build_object('balance',w.balance,'earned',w.lifetime_earned,'income',inc,'reward',reward); end; $$;
+grant select on public.asset_catalog to anon,authenticated; grant select on public.player_assets to authenticated; grant execute on function public.purchase_asset(text) to authenticated; grant execute on function public.collect_passive_income() to authenticated; revoke all on function public.purchase_asset(text) from public,anon; revoke all on function public.collect_passive_income() from public,anon;
