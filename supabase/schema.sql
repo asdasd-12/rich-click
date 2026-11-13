@@ -343,9 +343,9 @@ begin
     raise exception 'QUERY_TOO_SHORT';
   end if;
   return query
-    select p.user_id,p.nickname,w.balance
-    from public.player_profiles p
-    join public.player_wallets w using(user_id)
+    select p.user_id as user_id,p.nickname as nickname,w.balance as balance
+    from public.player_profiles as p
+    join public.player_wallets as w on w.user_id = p.user_id
     where p.nickname ilike '%' || left(trim(p_query),18) || '%'
     order by p.nickname
     limit 20;
