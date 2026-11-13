@@ -784,3 +784,32 @@ grant execute on function public.admin_reset_player_progress(uuid) to authentica
 grant execute on function public.admin_reset_all_progress() to authenticated;
 revoke all on function public.admin_reset_player_progress(uuid) from public,anon;
 revoke all on function public.admin_reset_all_progress() from public,anon;
+
+
+-- Fix admin player search: qualify the admin-table user_id so it cannot
+-- collide with the RETURNS TABLE output column named user_id.
+create or replace function public.admin_search_players(p_query text)
+returns table(user_id uuid,nickname text,balance bigint)
+language plpgsql stable security definer set search_path=public
+as $$
+begin
+  if auth.uid() is null or not exists(
+    select 1 from public.rich_click_admins as admins
+    where admins.user_id = auth.uid()
+  ) then
+    raise exception 'ADMIN_REQUIRED';
+  end if;
+  if p_query is null or char_length(trim(p_query)) < 2 then
+    raise exception 'QUERY_TOO_SHORT';
+  end if;
+  return query
+    select p.user_id, p.nickname, w.balance
+    from public.player_profiles as p
+    join public.player_wallets as w on w.user_id = p.user_id
+    where p.nickname ilike '%' || left(trim(p_query),18) || '%'
+    order by p.nickname
+    limit 20;
+end;
+$$;
+grant execute on function public.admin_search_players(text) to authenticated;
+revoke all on function public.admin_search_players(text) from public, anon;
