@@ -667,3 +667,120 @@ begin
     end loop;
   end if;
 end $$;
+
+
+-- Complete progress reset controls. These preserve auth accounts and nicknames,
+-- while clearing all player-owned gameplay progress and active market listings.
+create or replace function public.admin_reset_player_progress(p_user_id uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path=public
+as $$
+declare
+  relic_rows integer;
+  asset_rows integer;
+  listing_rows integer;
+begin
+  if auth.uid() is null or not exists (
+    select 1 from public.rich_click_admins where user_id=auth.uid()
+  ) then
+    raise exception 'ADMIN_REQUIRED';
+  end if;
+  if p_user_id is null or not exists (
+    select 1 from public.player_wallets where user_id=p_user_id
+  ) then
+    raise exception 'PLAYER_NOT_FOUND';
+  end if;
+
+  update public.market_listings
+    set status='cancelled'
+    where seller_id=p_user_id and status='active';
+  get diagnostics listing_rows=row_count;
+
+  delete from public.player_relics where user_id=p_user_id;
+  get diagnostics relic_rows=row_count;
+
+  delete from public.player_assets where user_id=p_user_id;
+  get diagnostics asset_rows=row_count;
+
+  update public.player_wallets
+    set balance=0,
+        lifetime_earned=0,
+        last_income_at=now(),
+        last_click_at=null,
+        updated_at=now()
+    where user_id=p_user_id;
+
+  perform public.admin_log(
+    'player_full_reset',
+    'user='||p_user_id||' relic_rows='||relic_rows||
+    ' asset_rows='||asset_rows||' listings_cancelled='||listing_rows
+  );
+
+  return jsonb_build_object(
+    'success',true,
+    'relic_rows',relic_rows,
+    'asset_rows',asset_rows,
+    'listings_cancelled',listing_rows
+  );
+end;
+$$;
+
+create or replace function public.admin_reset_all_progress()
+returns jsonb
+language plpgsql
+security definer
+set search_path=public
+as $$
+declare
+  affected_players integer;
+  relic_rows integer;
+  asset_rows integer;
+  listing_rows integer;
+begin
+  if auth.uid() is null or not exists (
+    select 1 from public.rich_click_admins where user_id=auth.uid()
+  ) then
+    raise exception 'ADMIN_REQUIRED';
+  end if;
+
+  update public.market_listings
+    set status='cancelled'
+    where status='active';
+  get diagnostics listing_rows=row_count;
+
+  delete from public.player_relics;
+  get diagnostics relic_rows=row_count;
+
+  delete from public.player_assets;
+  get diagnostics asset_rows=row_count;
+
+  update public.player_wallets
+    set balance=0,
+        lifetime_earned=0,
+        last_income_at=now(),
+        last_click_at=null,
+        updated_at=now();
+  get diagnostics affected_players=row_count;
+
+  perform public.admin_log(
+    'global_full_reset',
+    'players='||affected_players||' relic_rows='||relic_rows||
+    ' asset_rows='||asset_rows||' listings_cancelled='||listing_rows
+  );
+
+  return jsonb_build_object(
+    'success',true,
+    'affected_players',affected_players,
+    'relic_rows',relic_rows,
+    'asset_rows',asset_rows,
+    'listings_cancelled',listing_rows
+  );
+end;
+$$;
+
+grant execute on function public.admin_reset_player_progress(uuid) to authenticated;
+grant execute on function public.admin_reset_all_progress() to authenticated;
+revoke all on function public.admin_reset_player_progress(uuid) from public,anon;
+revoke all on function public.admin_reset_all_progress() from public,anon;
