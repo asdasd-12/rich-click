@@ -880,3 +880,10 @@ begin
 end $$;
 grant execute on function public.earn_click(bigint) to authenticated;
 revoke all on function public.earn_click(bigint) from public,anon;
+
+
+-- Property valuation rebalance: premium real estate costs and earns 3x.
+update public.asset_catalog
+set price=price*3,
+    income_per_second=income_per_second*3
+where category='property';
