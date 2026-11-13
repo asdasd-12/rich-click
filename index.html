@@ -38,7 +38,15 @@ const defaultState=()=>({cash:0,earned:0,click:1,luck:0,luckCost:1000000,nick:'�
 let s;try{s={...defaultState(),...JSON.parse(localStorage.getItem('richClickSave')||'{}')}}catch{s=defaultState()}
 if(!Array.isArray(s.collection))s.collection=[];if(!s.relicPurchases||typeof s.relicPurchases!=='object'){s.relicPurchases={};for(const id of s.collection)s.relicPurchases[id]=(s.relicPurchases[id]||0)+1;}
 function save(){localStorage.setItem('richClickSave',JSON.stringify(s))}
-function addCash(n){s.cash+=n;s.earned+=n;save();render()}
+async function addCash(n){
+ const {data:{session}}=await sb.auth.getSession();
+ if(session){
+  const {data,error}=await sb.rpc('earn_click',{p_amount:n});
+  if(error){if(!error.message.includes('CLICK_TOO_FAST'))alert('Не удалось начислить деньги: '+error.message);return;}
+  s.cash=Number(data.balance);s.earned=Math.max(s.earned,Number(data.earned));save();render();return;
+ }
+ s.cash+=n;s.earned+=n;save();render();
+}
 function showPage(id){document.querySelectorAll('.page').forEach(p=>p.classList.toggle('active',p.id===id));document.querySelectorAll('.nav button').forEach(b=>b.classList.toggle('active',b.dataset.page===id));if(id==='shop')renderShop();if(id==='rating')renderRating();if(id==='market')renderMarket()}
 $('nav').addEventListener('click',e=>{let b=e.target.closest('button[data-page]');if(b)showPage(b.dataset.page)});
 window.showPage=showPage;
@@ -51,20 +59,27 @@ function slot(){return Math.floor(Date.now()/7200000)}
 function getShop(){let sl=slot();if(s.shopSlot===sl&&s.shop?.length===3)return;let pool=[...relics],offers=[];let weights={common:65,rare:23,epic:9,legendary:3};weights.rare+=s.luck*2;weights.epic+=s.luck*1.5;weights.legendary+=s.luck;weights.common=Math.max(10,65-s.luck*4.5);for(let j=0;j<3;j++){let tierRoll=Math.random()*Object.values(weights).reduce((a,b)=>a+b,0),tier='common';for(let [k,v] of Object.entries(weights)){tierRoll-=v;if(tierRoll<=0){tier=k;break}}let choices=pool.filter(r=>r[4]===tier);if(!choices.length)choices=pool;let pick=choices[Math.floor(Math.random()*choices.length)];offers.push(pick[0]);pool=pool.filter(r=>r[0]!==pick[0])}s.shopSlot=sl;s.shop=offers;save()}
 function renderShop(){getShop();$('shopGrid').innerHTML=s.shop.map(id=>{let r=relics.find(x=>x[0]===id),count=s.relicPurchases[id]||0,limit=count>=3;return '<article class="item"><div class="emoji">'+r[1]+'</div><div class="tag rarity-'+r[4]+'">'+rarityName[r[4]]+'</div><b>'+r[2]+'</b><div class="muted">'+r[3]+'</div><div class="price">'+fmt(r[5])+'</div><div class="muted">Куплено: '+count+' / 3</div><button class="primary" '+(limit?'disabled':'')+' onclick="buyRelic(\''+id+'\')">'+(limit?'Лимит достигнут':'Приобрести')+'</button></article>'}).join('');$('luck').textContent=s.luck;$('luckCost').textContent=fmt(s.luckCost)}
 $('upgradeLuck').onclick=()=>{if(s.cash<s.luckCost)return alert('Не хватает денег!');s.cash-=s.luckCost;s.luck++;s.luckCost*=10;save();renderShop();render()};
-window.buyRelic=function(id){
+window.buyRelic=async function(id){
  const item=relics.find(x=>x[0]===id);
  if(!item)return alert('Предмет не найден.');
  const count=s.relicPurchases[id]||0;
  if(count>=3)return alert('Лимит покупки этой редкости — 3 экземпляра.');
+ const {data:{session}}=await sb.auth.getSession();
+ if(session){
+  const {data,error}=await sb.rpc('purchase_relic',{p_relic_id:id});
+  if(error)return alert('Покупка не прошла: '+error.message);
+  s.cash=Number(data.remaining_balance);
+  s.relicPurchases[id]=count+1;
+  s.collection.push(id);
+  save();render();renderShop();await renderMarket();await renderRating();
+  return alert('Покупка успешна! Предмет сохранён в аккаунте.');
+ }
  if(s.cash<item[5])return alert('Не хватает денег!');
- s.cash-=item[5];
- s.relicPurchases[id]=count+1;
- s.collection.push(id);
- save();
- render();
- renderShop();
- alert('Покупка успешна! Предмет добавлен в коллекцию.');
+ s.cash-=item[5];s.relicPurchases[id]=count+1;s.collection.push(id);
+ save();render();renderShop();
+ alert('Покупка успешна! Предмет добавлен в локальную коллекцию.');
 };
+
 function renderCollection(){$('collectionTotal').textContent=s.collection.length+' предметов';$('relicCount').textContent=s.collection.length;$('collectionGrid').innerHTML=s.collection.length?s.collection.map(id=>{let r=relics.find(x=>x[0]===id);return '<article class="item"><div class="emoji">'+r[1]+'</div><div class="tag rarity-'+r[4]+'">'+rarityName[r[4]]+'</div><b>'+r[2]+'</b><div class="muted">'+r[3]+'</div></article>'}).join(''):'<div class="empty">Коллекция пока пуста. Загляни в магазин раритетов!</div>'}
 function render(){let inc=income(),level=1+Math.floor(Math.sqrt(s.earned/1000));$('balance').textContent=fmt(s.cash);$('heroBalance').textContent=fmt(s.cash);$('income').textContent=fmt(inc);$('perclick').textContent=fmt(s.click);$('clickHint').textContent='+ '+fmt(s.click)+' за нажатие';$('earned').textContent=fmt(s.earned);$('level').textContent=level;$('xpbar').style.width=(s.earned%Math.max(1,level*level*1000))/(Math.max(1,level*level*1000))*100+'%';$('assets').textContent=Object.values(s.owned).reduce((a,b)=>a+b,0);cards(businesses,'business','businessGrid');cards(properties,'property','propertyGrid');cards(cars,'cars','carsGrid');renderCollection();$('nickname').value=s.nick}
 async function renderMarket(){
