@@ -302,7 +302,9 @@ const catalogPhotoQueries={
 async function loadCatalogPhotos(root,arr,kind){
  const nodes=Array.from(root.querySelectorAll('[data-catalog-photo]'));let cursor=0;
  async function worker(){while(cursor<nodes.length){const el=nodes[cursor++],index=Number(el.dataset.catalogPhoto),item=arr[index];if(!item)continue;
-  const queries=catalogPhotoQueries[item[1]]||[item[1]+' '+item[2]+' '+(kind==='business'?'business exterior photograph':'residential property architecture photograph')];
+  const categoryQueries=catalogPhotoQueries[item[1]]||[];
+  const identityQuery=[item[1],item[2]].filter(Boolean).join(' ');
+  const queries=[identityQuery,...categoryQueries,item[1]+' '+(kind==='business'?'business exterior photograph':'residential property architecture photograph')];
   let photo=null;
   for(let attempt=0;attempt<4;attempt++){
    photo=await findPhoto(queries[0],queries.slice(1),[...catalogPhotoUsed]);
