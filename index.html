@@ -229,34 +229,101 @@ function makeGeneratedArtwork(item,kind,index){
  const name=String(item?.[1]||item?.[2]||'Объект');
  const desc=String(item?.[2]||'');
  const seed=[...name+kind+index].reduce((a,c)=>(a*31+c.charCodeAt(0))>>>0,7);
- const accent=['#e2bf28','#c6a82b','#9d8730','#d5b94b'][seed%4];
- const ink='#292b30',muted='#aeb1b6',paper='#f7f7f3';
- const is=(re)=>re.test(name+' '+desc);
+ const accent=['#d9b52b','#c5a12a','#a88b27','#e0c44c'][seed%4];
+ const ink='#303238',muted='#aeb3b8',paper='#f5f5f1',glass='#dce5e5';
+ const is=re=>re.test(name+' '+desc);
  let art='';
  if(kind==='cars'){
   const type=/SUV|внедорожник|G 63|Urus|Range Rover|Cayenne|Defender/i.test(name+' '+desc)?'suv':/V-Class|минивэн|фургон/i.test(name+' '+desc)?'van':/812|488|911|Huracán|Aventador|McLaren|купе|суперкар|спорткар/i.test(name+' '+desc)?'sport':/винтаж|классик|W123|300 SL|507|2002|E30/i.test(name+' '+desc)?'classic':'sedan';
-  const roof=type==='suv'?'M73 111 L87 66 Q91 58 109 58 H190 Q204 60 220 111':type==='van'?'M76 111 L84 55 H207 Q218 56 223 111':type==='sport'?'M65 111 L105 83 Q127 61 169 67 L215 91 L235 111':'M72 111 L97 76 Q107 65 129 65 H184 Q202 67 220 111';
-  const body='M38 111 Q48 104 70 103 L'+(type==='sport'?'82 98':'78 100')+' '+roof+' L242 111 Q257 114 264 126 L261 139 H40 Q32 136 34 126Z';
-  const glass=type==='van'?'M93 62H197L208 101H86Z':type==='suv'?'M96 66H184L203 101H85Z':type==='sport'?'M113 82Q133 68 166 72L197 91H95Z':'M108 73H181Q195 74 207 101H91Z';
-  art='<ellipse cx="150" cy="151" rx="105" ry="6" fill="#dcded9"/><path d="'+body+'" fill="#fff" stroke="'+ink+'" stroke-width="3" stroke-linejoin="round"/><path d="'+glass+'" fill="#e9eceb" stroke="'+ink+'" stroke-width="2.5" stroke-linejoin="round"/><path d="M150 70V103M44 124H63M237 124H257" stroke="'+ink+'" stroke-width="2" stroke-linecap="round"/><path d="M47 135H68M233 135H254" stroke="'+muted+'" stroke-width="2"/><circle cx="87" cy="137" r="17" fill="'+paper+'" stroke="'+ink+'" stroke-width="4"/><circle cx="87" cy="137" r="6" fill="'+accent+'"/><circle cx="216" cy="137" r="17" fill="'+paper+'" stroke="'+ink+'" stroke-width="4"/><circle cx="216" cy="137" r="6" fill="'+accent+'"/><path d="M42 115H59M243 115H259" stroke="'+accent+'" stroke-width="4" stroke-linecap="round"/>';
+  let silhouette=type==='suv'?'M34 119 Q39 105 62 101 L78 65 Q82 56 96 55 H190 Q205 57 215 76 L232 103 Q254 106 265 119 L263 139 H37Z':type==='van'?'M35 116 L49 105 L58 57 Q60 51 69 51 H209 Q220 51 224 64 L238 105 Q258 108 266 121 L263 139 H36Z':type==='sport'?'M31 122 Q47 110 73 107 L108 79 Q130 61 168 65 Q198 68 222 96 L247 108 Q263 113 269 126 L264 138 H34Z':type==='classic'?'M34 119 Q45 105 72 103 L91 77 Q102 65 127 65 H181 Q205 66 222 102 L248 108 Q264 114 267 127 L262 139 H37Z':'M34 119 Q44 106 70 104 L91 77 Q101 66 126 66 H184 Q204 67 219 102 L247 108 Q263 114 267 127 L262 139 H37Z';
+  const windows=type==='van'?'M69 59H202L213 99H62Z':type==='suv'?'M91 61H184Q195 61 204 77L216 99H77Z':type==='sport'?'M115 81Q137 67 165 70Q189 72 210 98H91Z':'M101 73Q109 69 126 69H179Q197 70 208 99H82Z';
+  const wheelY=133, front=type==='sport'?87:88, rear=type==='van'?218:216;
+  art='<ellipse cx="151" cy="151" rx="112" ry="5" fill="#d9dad5"/>'+
+   '<path d="'+silhouette+'" fill="#fff" stroke="'+ink+'" stroke-width="3" stroke-linejoin="round"/>'+
+   '<path d="'+windows+'" fill="'+glass+'" stroke="'+ink+'" stroke-width="2.5" stroke-linejoin="round"/>'+
+   '<path d="M'+(type==='van'?151:150)+' 70V103M48 117H70M231 117H253" fill="none" stroke="'+muted+'" stroke-width="2"/>'+
+   '<path d="M43 124Q57 119 70 122M233 122L258 126" fill="none" stroke="'+accent+'" stroke-width="3" stroke-linecap="round"/>'+
+   '<path d="M48 136H66M235 136H253" stroke="'+ink+'" stroke-width="2" stroke-linecap="round"/>'+
+   '<circle cx="'+front+'" cy="'+wheelY+'" r="19" fill="'+paper+'" stroke="'+ink+'" stroke-width="4"/><circle cx="'+front+'" cy="'+wheelY+'" r="10" fill="#d5d8d6" stroke="'+muted+'" stroke-width="1.5"/><circle cx="'+front+'" cy="'+wheelY+'" r="3.5" fill="'+accent+'"/>'+
+   '<circle cx="'+rear+'" cy="'+wheelY+'" r="19" fill="'+paper+'" stroke="'+ink+'" stroke-width="4"/><circle cx="'+rear+'" cy="'+wheelY+'" r="10" fill="#d5d8d6" stroke="'+muted+'" stroke-width="1.5"/><circle cx="'+rear+'" cy="'+wheelY+'" r="3.5" fill="'+accent+'"/>'+
+   '<path d="M'+(front+19)+' 112Q'+(front+25)+' 105 '+(front+37)+' 104M'+(rear-20)+' 105Q'+(rear-8)+' 103 '+(rear-1)+' 111" fill="none" stroke="'+ink+'" stroke-width="2"/>';
  }else if(kind==='business'){
-  if(is(/завод|производ|нефт|энерг|порт|логист|склад/i)) art='<path d="M43 149V94L94 119V84L145 111V65L208 99V149Z" fill="#fff" stroke="'+ink+'" stroke-width="3" stroke-linejoin="round"/><path d="M61 95V45H80V104M164 72V34H183V82" fill="none" stroke="'+ink+'" stroke-width="3"/><path d="M54 149H244" stroke="'+ink+'" stroke-width="3"/><g fill="'+accent+'"><rect x="63" y="125" width="17" height="16"/><rect x="101" y="125" width="17" height="16"/><rect x="151" y="125" width="17" height="16"/><rect x="190" y="125" width="17" height="16"/></g>';
-  else if(is(/банк|телеком|корпорац|маркетплейс|холдинг|конгломерат|лаборат|офис/i)) art='<path d="M75 150V63L150 31L225 63V150Z" fill="#fff" stroke="'+ink+'" stroke-width="3" stroke-linejoin="round"/><path d="M91 77H209M91 101H209M91 125H209" stroke="'+muted+'" stroke-width="3"/><g fill="'+accent+'"><rect x="101" y="82" width="12" height="12"/><rect x="144" y="82" width="12" height="12"/><rect x="187" y="82" width="12" height="12"/></g><path d="M150 31V18" stroke="'+ink+'" stroke-width="3"/>';
-  else art='<path d="M54 149V91L150 42L246 91V149Z" fill="#fff" stroke="'+ink+'" stroke-width="3" stroke-linejoin="round"/><path d="M70 96L150 56L230 96" fill="none" stroke="'+muted+'" stroke-width="3"/><path d="M80 149V111H220V149" fill="none" stroke="'+ink+'" stroke-width="3"/><g fill="'+accent+'"><rect x="91" y="117" width="18" height="24"/><rect x="141" y="117" width="18" height="24"/><rect x="191" y="117" width="18" height="24"/></g>';
+  if(is(/завод|производ|нефт|энерг|порт|логист|склад/i)){
+   art='<path d="M42 149V99L91 119V88L140 112V70L190 98V86L245 111V149Z" fill="#fff" stroke="'+ink+'" stroke-width="3" stroke-linejoin="round"/>'+
+    '<path d="M65 98V45H82V106M163 80V33H181V91" fill="#eceeea" stroke="'+ink+'" stroke-width="3"/>'+
+    '<path d="M70 54Q62 43 72 34M169 39Q160 27 171 17" fill="none" stroke="'+muted+'" stroke-width="3" stroke-linecap="round"/>'+
+    '<path d="M55 149H252" stroke="'+ink+'" stroke-width="3"/>'+
+    '<g fill="'+accent+'" stroke="'+ink+'" stroke-width="1.5"><rect x="61" y="126" width="18" height="16"/><rect x="103" y="126" width="18" height="16"/><rect x="151" y="126" width="18" height="16"/><rect x="207" y="126" width="18" height="16"/></g>';
+  }else if(is(/банк|телеком|корпорац|маркетплейс|холдинг|конгломерат|лаборат|офис/i)){
+   art='<path d="M77 150V61L150 29L223 61V150Z" fill="#fff" stroke="'+ink+'" stroke-width="3" stroke-linejoin="round"/>'+
+    '<path d="M77 62L150 29L223 62" fill="none" stroke="'+ink+'" stroke-width="3"/>'+
+    '<path d="M91 77H209M91 101H209M91 125H209" stroke="'+muted+'" stroke-width="2"/>'+
+    '<g fill="'+glass+'" stroke="'+ink+'" stroke-width="1.5"><rect x="98" y="67" width="16" height="12"/><rect x="142" y="67" width="16" height="12"/><rect x="186" y="67" width="16" height="12"/><rect x="98" y="87" width="16" height="12"/><rect x="142" y="87" width="16" height="12"/><rect x="186" y="87" width="16" height="12"/></g>'+
+    '<path d="M139 150V129Q150 115 161 129V150" fill="'+accent+'" stroke="'+ink+'" stroke-width="2"/>';
+  }else{
+   art='<path d="M53 149V91L150 42L247 91V149Z" fill="#fff" stroke="'+ink+'" stroke-width="3" stroke-linejoin="round"/>'+
+    '<path d="M68 96L150 55L232 96" fill="none" stroke="'+muted+'" stroke-width="3"/>'+
+    '<path d="M82 149V111H218V149" fill="none" stroke="'+ink+'" stroke-width="2"/>'+
+    '<g fill="'+glass+'" stroke="'+ink+'" stroke-width="1.5"><rect x="91" y="113" width="24" height="29"/><rect x="138" y="113" width="24" height="29"/><rect x="185" y="113" width="24" height="29"/></g>'+
+    '<path d="M143 149V127Q150 119 157 127V149" fill="'+accent+'" stroke="'+ink+'" stroke-width="1.5"/>';
+  }
  }else if(kind==='property'){
-  if(is(/замок|дворец/i)) art='<path d="M48 149V77H78V57H103V77H126V46H151V77H176V57H201V77H232V149Z" fill="#fff" stroke="'+ink+'" stroke-width="3" stroke-linejoin="round"/><path d="M132 149V116Q150 88 168 116V149" fill="'+accent+'" stroke="'+ink+'" stroke-width="2"/><path d="M38 149H262" stroke="'+ink+'" stroke-width="3"/>';
-  else if(is(/остров|архипелаг|курорт/i)) art='<path d="M26 137Q72 112 115 123Q174 91 274 139Q212 159 150 154Q77 155 26 137Z" fill="#e9dfc2" stroke="'+ink+'" stroke-width="2"/><path d="M29 127Q91 99 128 113Q189 83 269 122" fill="none" stroke="#a8c7c5" stroke-width="10"/><path d="M115 114L134 63L151 114M161 111L181 54L203 112" fill="#d9e1d4" stroke="'+ink+'" stroke-width="2"/><path d="M131 116V92H165V116Z" fill="#fff" stroke="'+ink+'" stroke-width="2"/>';
-  else if(is(/арена|стадион/i)) art='<path d="M43 130Q52 51 150 51Q248 51 257 130L235 150H65Z" fill="#fff" stroke="'+ink+'" stroke-width="3"/><path d="M65 111Q150 75 235 111" fill="none" stroke="'+accent+'" stroke-width="8"/><path d="M82 124V147M116 116V148M150 112V149M184 116V148M218 124V147" stroke="'+ink+'" stroke-width="3"/>';
-  else if(is(/мегаполис|небоскр|квартал|комплекс|пентхаус/i)) art='<path d="M37 150V104L77 77L117 104V150M118 150V57L168 31L218 57V150M219 150V110L250 91L281 110V150Z" fill="#fff" stroke="'+ink+'" stroke-width="3" stroke-linejoin="round"/><g fill="'+accent+'"><rect x="55" y="115" width="13" height="16"/><rect x="83" y="115" width="13" height="16"/><rect x="137" y="75" width="15" height="18"/><rect x="183" y="75" width="15" height="18"/><rect x="239" y="120" width="13" height="15"/></g>';
-  else art='<path d="M70 150V91L150 40L230 91V150Z" fill="#fff" stroke="'+ink+'" stroke-width="3" stroke-linejoin="round"/><path d="M85 94L150 53L215 94" fill="none" stroke="'+muted+'" stroke-width="3"/><path d="M91 108H209" stroke="'+ink+'" stroke-width="2"/><g fill="'+accent+'"><rect x="101" y="116" width="17" height="25"/><rect x="142" y="116" width="17" height="25"/><rect x="183" y="116" width="17" height="25"/></g>';
+  if(is(/замок|дворец/i)){
+   art='<path d="M43 149V79H72V59H99V79H125V48H151V79H177V59H204V79H233V149Z" fill="#fff" stroke="'+ink+'" stroke-width="3" stroke-linejoin="round"/>'+
+    '<path d="M43 79L57 69L72 79M99 79L112 68L125 79M177 79L190 68L204 79M233 79L247 69L260 79" fill="none" stroke="'+ink+'" stroke-width="2"/>'+
+    '<g fill="'+glass+'" stroke="'+ink+'" stroke-width="1.5"><path d="M75 103V91Q86 78 97 91V103Z"/><path d="M126 103V91Q138 77 150 91V103Z"/><path d="M178 103V91Q190 78 202 91V103Z"/></g>'+
+    '<path d="M132 149V119Q150 91 168 119V149Z" fill="'+accent+'" stroke="'+ink+'" stroke-width="2"/><path d="M38 149H262" stroke="'+ink+'" stroke-width="3"/>';
+  }else if(is(/остров|архипелаг|курорт/i)){
+   art='<path d="M22 137Q66 111 111 122Q173 88 278 138Q218 158 151 154Q75 155 22 137Z" fill="#e7ddc2" stroke="'+ink+'" stroke-width="2"/>'+
+    '<path d="M29 126Q91 98 128 112Q189 82 270 122" fill="none" stroke="#9dbfbd" stroke-width="9" stroke-linecap="round"/>'+
+    '<path d="M116 115L134 61L151 115M163 112L181 53L203 113" fill="#dce4d9" stroke="'+ink+'" stroke-width="2"/>'+
+    '<path d="M130 116V91H166V116Z" fill="#fff" stroke="'+ink+'" stroke-width="2"/><path d="M148 91V79" stroke="'+accent+'" stroke-width="3"/>';
+  }else if(is(/арена|стадион/i)){
+   art='<path d="M42 130Q49 54 150 48Q251 54 258 130L235 150H65Z" fill="#fff" stroke="'+ink+'" stroke-width="3"/>'+
+    '<path d="M58 111Q150 69 242 111L235 126Q150 91 65 126Z" fill="'+accent+'" stroke="'+ink+'" stroke-width="2"/>'+
+    '<path d="M76 128V148M108 117V149M150 108V149M192 117V149M224 128V148" stroke="'+ink+'" stroke-width="3"/>'+
+    '<path d="M90 88Q150 58 210 88" fill="none" stroke="'+muted+'" stroke-width="2"/>';
+  }else if(is(/мегаполис|небоскр|квартал|комплекс|пентхаус/i)){
+   art='<path d="M36 150V105L76 77L116 105V150M117 150V56L167 29L217 56V150M218 150V108L250 89L282 108V150Z" fill="#fff" stroke="'+ink+'" stroke-width="3" stroke-linejoin="round"/>'+
+    '<g fill="'+glass+'" stroke="'+muted+'" stroke-width="1"><rect x="51" y="111" width="13" height="17"/><rect x="86" y="111" width="13" height="17"/><rect x="135" y="65" width="14" height="17"/><rect x="184" y="65" width="14" height="17"/><rect x="135" y="96" width="14" height="17"/><rect x="184" y="96" width="14" height="17"/><rect x="238" y="116" width="13" height="16"/></g>'+
+    '<path d="M167 29V18M161 18H173" stroke="'+accent+'" stroke-width="3" stroke-linecap="round"/>';
+  }else{
+   art='<path d="M68 149V92L150 39L232 92V149Z" fill="#fff" stroke="'+ink+'" stroke-width="3" stroke-linejoin="round"/>'+
+    '<path d="M58 95L150 35L242 95" fill="none" stroke="'+ink+'" stroke-width="3" stroke-linejoin="round"/>'+
+    '<path d="M86 99H214" stroke="'+muted+'" stroke-width="2"/>'+
+    '<g fill="'+glass+'" stroke="'+ink+'" stroke-width="1.5"><rect x="91" y="108" width="23" height="26"/><rect x="139" y="108" width="23" height="26"/><rect x="187" y="108" width="23" height="26"/></g>'+
+    '<path d="M143 149V126Q150 117 157 126V149" fill="'+accent+'" stroke="'+ink+'" stroke-width="2"/>';
+  }
  }else{
-  if(is(/корона|венец/i)) art='<path d="M73 76L104 105L126 62L150 104L174 62L196 105L227 76L211 142H89Z" fill="#fff" stroke="'+ink+'" stroke-width="3" stroke-linejoin="round"/><path d="M89 142H211" stroke="'+accent+'" stroke-width="7"/><circle cx="73" cy="76" r="5" fill="'+accent+'"/><circle cx="126" cy="62" r="5" fill="'+accent+'"/><circle cx="174" cy="62" r="5" fill="'+accent+'"/><circle cx="227" cy="76" r="5" fill="'+accent+'"/>';
-  else if(is(/меч|клинок|кинжал/i)) art='<path d="M150 30L177 108L150 135L123 108Z" fill="#fff" stroke="'+ink+'" stroke-width="3" stroke-linejoin="round"/><path d="M150 31V134M116 117H184M150 134V158" stroke="'+accent+'" stroke-width="5" stroke-linecap="round"/>';
-  else if(is(/маска|лицо|стату|венера|ника|мыслител|психея|давид|поэт|писец|аполлон|дискобол|лаокоон/i)) art='<path d="M150 34Q205 38 205 91Q205 137 150 151Q95 137 95 91Q95 38 150 34Z" fill="#fff" stroke="'+ink+'" stroke-width="3"/><path d="M119 88Q132 76 144 88M156 88Q168 76 181 88" fill="none" stroke="'+ink+'" stroke-width="3" stroke-linecap="round"/><path d="M150 91L143 112H157M132 126Q150 136 168 126" fill="none" stroke="'+muted+'" stroke-width="3" stroke-linecap="round"/>';
-  else if(is(/карта|свиток|письмо|рукопис/i)) art='<path d="M90 39H195L211 55V151H90Z" fill="#fff" stroke="'+ink+'" stroke-width="3" stroke-linejoin="round"/><path d="M195 39V56H211M111 79H188M111 98H188M111 117H171" stroke="'+muted+'" stroke-width="3" stroke-linecap="round"/><path d="M111 137H151" stroke="'+accent+'" stroke-width="5" stroke-linecap="round"/>';
-  else art='<path d="M150 29L190 70L180 126L150 154L120 126L110 70Z" fill="#fff" stroke="'+ink+'" stroke-width="3" stroke-linejoin="round"/><path d="M150 29V154M110 70H190M120 126H180" stroke="'+accent+'" stroke-width="3"/><circle cx="150" cy="91" r="13" fill="'+accent+'" opacity=".75"/>';
+  if(is(/корона|венец/i)){
+   art='<path d="M69 67L101 96L124 49L150 96L176 49L199 96L231 67L214 142H86Z" fill="#e5d7a1" stroke="'+ink+'" stroke-width="3" stroke-linejoin="round"/>'+
+    '<path d="M86 142H214L208 153H92Z" fill="'+accent+'" stroke="'+ink+'" stroke-width="2"/>'+
+    '<path d="M91 111H209" stroke="#b58d26" stroke-width="2"/>'+
+    '<g fill="'+accent+'" stroke="'+ink+'" stroke-width="1"><circle cx="69" cy="67" r="6"/><circle cx="124" cy="49" r="6"/><circle cx="176" cy="49" r="6"/><circle cx="231" cy="67" r="6"/></g>';
+  }else if(is(/меч|клинок|кинжал/i)){
+   art='<path d="M150 25L174 105L150 130L126 105Z" fill="#e7ebeb" stroke="'+ink+'" stroke-width="3" stroke-linejoin="round"/>'+
+    '<path d="M150 28V127" stroke="#fff" stroke-width="3"/>'+
+    '<path d="M112 116Q150 126 188 116L181 129H119Z" fill="'+accent+'" stroke="'+ink+'" stroke-width="2"/>'+
+    '<path d="M150 129V157" stroke="'+ink+'" stroke-width="7" stroke-linecap="round"/><path d="M137 157H163" stroke="'+accent+'" stroke-width="5" stroke-linecap="round"/>';
+  }else if(is(/маска|лицо|стату|венера|ника|мыслител|психея|давид|поэт|писец|аполлон|дискобол|лаокоон/i)){
+   art='<path d="M150 28Q202 31 210 81L204 119Q191 148 150 157Q109 148 96 119L90 81Q98 31 150 28Z" fill="#e8e7e1" stroke="'+ink+'" stroke-width="3"/>'+
+    '<path d="M105 74Q113 44 150 42Q187 44 195 74" fill="none" stroke="#c2c0b8" stroke-width="6" stroke-linecap="round"/>'+
+    '<path d="M116 87Q130 77 143 88M157 88Q170 77 184 87" fill="none" stroke="'+ink+'" stroke-width="3" stroke-linecap="round"/>'+
+    '<path d="M150 89L143 112H157M130 127Q150 137 170 127" fill="none" stroke="'+ink+'" stroke-width="2.5" stroke-linecap="round"/>'+
+    '<path d="M126 157V168H174V157" fill="#d8d6cd" stroke="'+ink+'" stroke-width="2"/>';
+  }else if(is(/карта|свиток|письмо|рукопис|книга|манускрипт/i)){
+   art='<path d="M82 39Q82 31 92 31H197L216 48V151H92Q82 151 82 141Z" fill="#e9dfc5" stroke="'+ink+'" stroke-width="3"/>'+
+    '<path d="M197 31V50H216" fill="none" stroke="'+ink+'" stroke-width="2"/>'+
+    '<path d="M105 69H190M105 87H190M105 105H190M105 123H174" stroke="#aaa18e" stroke-width="3" stroke-linecap="round"/>'+
+    '<path d="M105 137H151" stroke="'+accent+'" stroke-width="4" stroke-linecap="round"/>';
+  }else{
+   art='<path d="M150 25L190 68L181 124L150 158L119 124L110 68Z" fill="#e7e9e6" stroke="'+ink+'" stroke-width="3" stroke-linejoin="round"/>'+
+    '<path d="M150 25V158M110 68H190M119 124H181" stroke="'+accent+'" stroke-width="3"/>'+
+    '<path d="M150 46L174 75L168 111L150 132L132 111L126 75Z" fill="#fff" stroke="'+muted+'" stroke-width="1.5"/>'+
+    '<circle cx="150" cy="90" r="10" fill="'+accent+'" opacity=".8"/>';
+  }
  }
- const svg='<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 190"><rect width="300" height="190" rx="14" fill="'+paper+'"/><path d="M18 162H282" stroke="#e4e5df" stroke-width="1.5"/><circle cx="260" cy="35" r="4" fill="'+accent+'" opacity=".9"/>'+art+'</svg>';
+ const svg='<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 190"><rect width="300" height="190" rx="14" fill="'+paper+'"/><path d="M18 169H282" stroke="#e3e4df" stroke-width="1.5"/><circle cx="260" cy="34" r="3.5" fill="'+accent+'"/>'+art+'</svg>';
  return 'data:image/svg+xml;charset=UTF-8,'+encodeURIComponent(svg);
 }
 function putLocalArtwork(el,item,kind,index){
