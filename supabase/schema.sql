@@ -707,6 +707,8 @@ begin
   update public.player_wallets
     set balance=0,
         lifetime_earned=0,
+        luck_level=0,
+        rebirths=0,
         last_income_at=now(),
         last_click_at=null,
         updated_at=now()
@@ -813,3 +815,68 @@ end;
 $$;
 grant execute on function public.admin_search_players(text) to authenticated;
 revoke all on function public.admin_search_players(text) from public, anon;
+
+
+-- Persistent luck and rebirth progression, scoped to each authenticated account.
+alter table public.player_wallets
+  add column if not exists luck_level integer not null default 0 check(luck_level between 0 and 100),
+  add column if not exists rebirths integer not null default 0 check(rebirths between 0 and 50);
+
+create or replace function public.purchase_luck_upgrade()
+returns jsonb language plpgsql security definer set search_path=public
+as $$
+declare uid uuid:=auth.uid(); w public.player_wallets%rowtype; cost numeric;
+begin
+ if uid is null then raise exception 'AUTH_REQUIRED'; end if;
+ select * into w from public.player_wallets where user_id=uid for update;
+ if not found then raise exception 'WALLET_NOT_FOUND'; end if;
+ if w.luck_level>=100 then raise exception 'LUCK_MAX_LEVEL'; end if;
+ cost:=1000000::numeric*power(10::numeric,w.luck_level);
+ if cost>w.balance then raise exception 'INSUFFICIENT_FUNDS'; end if;
+ update public.player_wallets set balance=balance-cost::bigint,luck_level=luck_level+1,updated_at=now()
+ where user_id=uid returning * into w;
+ return jsonb_build_object('balance',w.balance,'luck_level',w.luck_level,'luck_cost',1000000::numeric*power(10::numeric,w.luck_level));
+end $$;
+
+create or replace function public.purchase_rebirth()
+returns jsonb language plpgsql security definer set search_path=public
+as $$
+declare uid uuid:=auth.uid(); w public.player_wallets%rowtype; cost numeric;
+begin
+ if uid is null then raise exception 'AUTH_REQUIRED'; end if;
+ select * into w from public.player_wallets where user_id=uid for update;
+ if not found then raise exception 'WALLET_NOT_FOUND'; end if;
+ if w.rebirths>=50 then raise exception 'REBIRTH_MAX'; end if;
+ cost:=100000::numeric*power(10::numeric,w.rebirths);
+ if cost>w.balance then raise exception 'INSUFFICIENT_FUNDS'; end if;
+ update public.player_wallets
+   set balance=balance-cost::bigint,lifetime_earned=0,rebirths=rebirths+1,
+       last_income_at=now(),last_click_at=null,updated_at=now()
+   where user_id=uid returning * into w;
+ return jsonb_build_object('balance',w.balance,'rebirths',w.rebirths,'click_multiplier',1+w.rebirths*0.1,'next_cost',100000::numeric*power(10::numeric,w.rebirths));
+end $$;
+
+grant execute on function public.purchase_luck_upgrade() to authenticated;
+grant execute on function public.purchase_rebirth() to authenticated;
+revoke all on function public.purchase_luck_upgrade() from public,anon;
+revoke all on function public.purchase_rebirth() from public,anon;
+
+-- Re-apply click rewards with the account's permanent rebirth multiplier.
+create or replace function public.earn_click(p_amount bigint)
+returns jsonb language plpgsql security definer set search_path=public
+as $$
+declare uid uuid:=auth.uid(); w public.player_wallets%rowtype; reward bigint; settings public.game_settings%rowtype;
+begin
+ if uid is null then raise exception 'AUTH_REQUIRED'; end if;
+ select * into settings from public.game_settings where id=true;
+ if settings.maintenance_mode then raise exception 'MAINTENANCE_MODE'; end if;
+ if p_amount is null or p_amount<1 then raise exception 'INVALID_REWARD'; end if;
+ select * into w from public.player_wallets where user_id=uid for update;
+ if not found then raise exception 'WALLET_NOT_FOUND'; end if;
+ if w.last_click_at is not null and w.last_click_at>now()-interval '150 milliseconds' then raise exception 'CLICK_TOO_FAST'; end if;
+ reward:=least(floor(least(p_amount,100)*settings.click_multiplier*(1+w.rebirths*0.1))::bigint,1000000000000);
+ update public.player_wallets set balance=balance+reward,lifetime_earned=lifetime_earned+reward,last_click_at=now(),updated_at=now() where user_id=uid returning * into w;
+ return jsonb_build_object('balance',w.balance,'earned',w.lifetime_earned,'reward',reward,'rebirths',w.rebirths);
+end $$;
+grant execute on function public.earn_click(bigint) to authenticated;
+revoke all on function public.earn_click(bigint) from public,anon;
