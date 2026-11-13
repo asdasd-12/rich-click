@@ -932,7 +932,13 @@ begin
  if not found then raise exception 'ASSET_NOT_FOUND'; end if;
  select * into w from public.player_wallets where user_id=uid for update;
  if not found then raise exception 'WALLET_NOT_FOUND'; end if;
- max_qty:=case a.category when 'business' then 5 when 'property' then 10 when 'cars' then 3 else 0 end;
+ max_qty:=case
+  when p_asset_key in ('cars:33','cars:34','cars:35','cars:36','cars:37','cars:38') then 1
+  when a.category='business' then 5
+  when a.category='property' then 10
+  when a.category='cars' then 3
+  else 0
+ end;
  if max_qty=0 then raise exception 'INVALID_ASSET_CATEGORY'; end if;
  select coalesce(quantity,0) into qty from public.player_assets
   where user_id=uid and asset_key=p_asset_key;
@@ -949,3 +955,14 @@ begin
 end $$;
 grant execute on function public.purchase_asset(text) to authenticated;
 revoke all on function public.purchase_asset(text) from public,anon;
+
+
+-- Ultra-rare vintage collector cars for the personal garage.
+insert into public.asset_catalog(asset_key,category,name,price,income_per_second) values
+('cars:33','cars','Mercedes-Benz 300 SL Gullwing',85000000000,0),
+('cars:34','cars','BMW 507 Roadster',72000000000,0),
+('cars:35','cars','Mercedes-Benz W123 (первое поколение)',18500000000,0),
+('cars:36','cars','BMW M3 E30',26500000000,0),
+('cars:37','cars','Mercedes-Benz 190E Evo II',49000000000,0),
+('cars:38','cars','BMW 2002 Turbo',33500000000,0)
+on conflict(asset_key) do update set category=excluded.category,name=excluded.name,price=excluded.price,income_per_second=excluded.income_per_second;
