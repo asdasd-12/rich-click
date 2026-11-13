@@ -22,7 +22,22 @@ insert into public.relic_catalog(id,name,rarity,base_value) values
 ('liberty','Свобода, ведущая народ','legendary',1100000),
 ('psyche','Амур и Психея','legendary',1600000),
 ('hammurabi','Стела Хаммурапи','legendary',2200000),
-('david','Давид','common',26000),('thinker2','Поэт','common',31000),('waterlilies','Кувшинки','rare',115000),('scream','Крик','rare',135000),('guernica','Герника','rare',155000),('nightwatch','Ночной дозор','epic',430000),('creation','Сотворение Адама','epic',520000),('birthvenus','Рождение Венеры','epic',610000),('sunflowers','Подсолнухи','epic',720000),('girlred','Портрет дамы в красном','legendary',2600000),('terracotta','Терракотовая армия','legendary',3100000),('mask','Золотая погребальная маска','legendary',4200000),('crown','Императорская корона','legendary',5800000)
+('david','Давид','common',26000),('thinker2','Поэт','common',31000),('waterlilies','Кувшинки','rare',115000),('scream','Крик','rare',135000),('guernica','Герника','rare',155000),('nightwatch','Ночной дозор','epic',430000),('creation','Сотворение Адама','epic',520000),('birthvenus','Рождение Венеры','epic',610000),('sunflowers','Подсолнухи','epic',720000),('girlred','Портрет дамы в красном','legendary',2600000),('terracotta','Терракотовая армия','legendary',3100000),('mask','Золотая погребальная маска','legendary',4200000),('crown','Императорская корона','legendary',5800000),
+('apollo','Аполлон Бельведерский','rare',185000),
+('discobolus','Дискобол','rare',205000),
+('laocoon','Лаокоон и его сыновья','epic',850000),
+('mona2','Мадонна в скалах','epic',920000),
+('lastsupper','Тайная вечеря','epic',1050000),
+('persistence','Постоянство памяти','epic',1250000),
+('american_gothic','Американская готика','epic',1450000),
+('girl_vermeer','Молодая женщина с кувшином','epic',1650000),
+('ivory_chess','Императорские шахматы','legendary',6500000),
+('jade_dragon','Нефритовый дракон','legendary',7800000),
+('pharaoh_mask','Маска фараона','legendary',9200000),
+('royal_scepter','Королевский скипетр','legendary',11500000),
+('blue_diamond','Голубой бриллиант','legendary',14500000),
+('golden_fleece','Золотое руно','legendary',18500000),
+('ancient_map','Карта неизвестных земель','legendary',22000000)
 on conflict (id) do update set name=excluded.name, rarity=excluded.rarity, base_value=excluded.base_value;
 
 create table if not exists public.player_profiles (
@@ -261,7 +276,31 @@ insert into public.asset_catalog(asset_key,category,name,price,income_per_second
 ('cars:9','cars','McLaren 750S',42000000,0),
 ('cars:10','cars','Bugatti Chiron',180000000,0),
 ('cars:11','cars','Pagani Huayra',320000000,0),
-('cars:12','cars','Koenigsegg Jesko',520000000,0)
+('cars:12','cars','Koenigsegg Jesko',520000000,0),
+('business:12','business','Морской порт',28000000000,850000000),
+('business:13','business','Нефтяная корпорация',95000000000,3200000000),
+('business:14','business','Строительный холдинг',280000000000,9800000000),
+('business:15','business','Глобальный маркетплейс',850000000000,32000000000),
+('business:16','business','ИИ-лаборатория',2400000000000,105000000000),
+('business:17','business','Биотех-корпорация',7500000000000,360000000000),
+('business:18','business','Международный конгломерат',24000000000000,1250000000000),
+('business:19','business','Орбитальная империя',85000000000000,5200000000000),
+('property:8','property','Исторический замок',28000000000,420000000),
+('property:9','property','Архипелаг вилл',95000000000,1800000000),
+('property:10','property','Развлекательный квартал',320000000000,7200000000),
+('property:11','property','Национальная арена',980000000000,26000000000),
+('property:12','property','Умный мегаполис',4800000000000,145000000000),
+('property:13','property','Лунная база',22000000000000,820000000000),
+('cars:13','cars','Mercedes-AMG G 63',68000000,0),
+('cars:14','cars','Porsche 918 Spyder',125000000,0),
+('cars:15','cars','Ferrari LaFerrari',210000000,0),
+('cars:16','cars','Aston Martin Valkyrie',265000000,0),
+('cars:17','cars','Rimac Nevera',310000000,0),
+('cars:18','cars','Hennessey Venom F5',390000000,0),
+('cars:19','cars','Bugatti Bolide',480000000,0),
+('cars:20','cars','Pagani Utopia',560000000,0),
+('cars:21','cars','Ferrari Daytona SP3',720000000,0),
+('cars:22','cars','Mercedes-Benz Project One',950000000,0)
 on conflict(asset_key) do update set category=excluded.category,name=excluded.name,price=excluded.price,income_per_second=excluded.income_per_second;
 create table if not exists public.player_assets(user_id uuid not null references auth.users(id) on delete cascade,asset_key text not null references public.asset_catalog(asset_key),quantity integer not null default 0 check(quantity>=0),primary key(user_id,asset_key));
 alter table public.player_assets enable row level security;
