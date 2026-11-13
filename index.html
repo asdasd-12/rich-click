@@ -111,6 +111,18 @@ body[data-theme="dark"] .stat:hover{border-color:#655a2c}
 @media(max-width:800px){.stats{width:100%;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}.stat{min-width:0;padding:10px 11px;min-height:62px}}
 @media(max-width:520px){.stats{gap:6px}.stat{padding:9px 8px;border-radius:12px;min-height:58px}.stat small{font-size:8px;letter-spacing:.65px}.stat b{font-size:16px}}
 
+
+.site-modal[hidden]{display:none!important}.site-modal{position:fixed;inset:0;z-index:10000;display:grid;place-items:center;padding:18px}
+.site-modal-backdrop{position:absolute;inset:0;background:#08090bcc;backdrop-filter:blur(5px)}
+.site-modal-card{position:relative;width:min(100%,420px);padding:22px;border:1px solid #e5e7eb;border-radius:18px;background:#fff;color:#17191d;box-shadow:0 24px 80px #0005}
+.site-modal-card h2{font-size:19px;margin:0 0 8px}.site-modal-close{width:34px;height:34px;padding:0;font-size:22px;line-height:1;border-radius:10px}
+.site-modal-card label{display:block;margin:15px 0 6px;font-size:13px;font-weight:750}
+.site-modal-card input{display:block;width:100%;padding:12px!important;font-size:16px}
+.site-modal-hint{margin-top:5px;color:#777e89;font-size:12px}.site-modal-error{min-height:18px;margin-top:8px;color:#c62828;font-size:13px}
+.site-modal-actions{justify-content:flex-end;margin-top:12px}
+body[data-theme="dark"] .site-modal-card{background:#1b1d22;color:#f4f5f7;border-color:#363a43}
+body[data-theme="dark"] .site-modal-card input{background:#111318!important;color:#f4f5f7!important;border-color:#393d46!important}
+body[data-theme="dark"] .site-modal-hint{color:#a6abb5}
 </style>
 </head>
 <body><div class="wrap">
@@ -136,7 +148,22 @@ body[data-theme="dark"] .stat:hover{border-color:#655a2c}
 <div data-admin-page="logs" hidden><h4>Последние действия администраторов</h4><button id="logsRefresh">Обновить журнал</button><div id="adminLogs" style="margin-top:12px"></div></div>
 <div id="adminMessage" class="notice" style="margin-top:12px">Панель администратора загружена.</div></section>
 <div id="globalAnnouncement" hidden style="position:fixed;z-index:9999;top:12px;left:50%;transform:translateX(-50%);width:min(680px,calc(100% - 24px));padding:16px 18px;background:#29230d;border:1px solid #ffdd2d;border-radius:16px;box-shadow:0 12px 40px #0009"><div class="row"><b id="announcementTitle">Объявление</b><button id="announcementClose" aria-label="Закрыть">✕</button></div><div id="announcementBody" style="margin-top:6px"></div></div><button id="reset">Сбросить прогресс</button></div></section>
-</main><footer>RICH CLICK · Виртуальная игровая экономика · Не реальные деньги</footer></div>
+</main>
+<div id="listingModal" class="site-modal" hidden>
+ <div class="site-modal-backdrop" data-listing-close></div>
+ <section class="site-modal-card" role="dialog" aria-modal="true" aria-labelledby="listingTitle">
+  <div class="row"><h2 id="listingTitle">Выставить на биржу</h2><button type="button" class="site-modal-close" data-listing-close aria-label="Закрыть">×</button></div>
+  <div class="muted" id="listingRelicName"></div>
+  <label for="listingQuantity">Количество предметов</label>
+  <input id="listingQuantity" type="number" min="1" step="1" value="1">
+  <div class="site-modal-hint" id="listingQuantityHint"></div>
+  <label for="listingPrice">Цена за один предмет ($)</label>
+  <input id="listingPrice" type="number" min="1" step="1">
+  <div id="listingError" class="site-modal-error" role="alert"></div>
+  <div class="row site-modal-actions"><button type="button" data-listing-close>Отмена</button><button type="button" class="primary" id="listingSubmit">Выставить</button></div>
+ </section>
+</div>
+<footer>RICH CLICK · Виртуальная игровая экономика · Не реальные деньги</footer></div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 const SUPABASE_URL="https://mpjrgurjmdueccaupkwu.supabase.co";
@@ -240,7 +267,7 @@ async function renderMarket(){
  const listings=listRes.data||[];
  listEl.innerHTML=listings.length?listings.map(x=>{const r=relics.find(z=>z[0]===x.relic_id);if(!r)return '';const mine=x.seller_id===session.user.id;return '<article class="item"><div class="emoji">'+r[1]+'</div><div class="tag rarity-'+r[4]+'">'+rarityName[r[4]]+'</div><b>'+r[2]+'</b><div class="muted">Количество: '+x.quantity+'</div><div class="price">'+fmt(x.unit_price)+' за штуку</div><div class="muted">Итого: '+fmt(x.unit_price*x.quantity)+'</div><button class="'+(mine?'':'primary')+'" onclick="'+(mine?'cancelListing':'buyListing')+'(\''+x.id+'\')">'+(mine?'Снять объявление':'Купить')+'</button></article>'}).join(''):'<div class="empty">Пока нет активных объявлений.</div>';
 }
-window.listRelic=async(id,max)=>{const q=Number(prompt('Сколько предметов выставить? (доступно '+max+')','1'));if(!Number.isInteger(q)||q<1||q>max)return;const p=Number(prompt('Цена за один предмет ($)',''+relics.find(x=>x[0]===id)[5]));if(!Number.isSafeInteger(p)||p<1)return;const {error}=await sb.rpc('create_relic_listing',{p_relic_id:id,p_quantity:q,p_unit_price:p});if(error)alert('Не удалось выставить: '+error.message);await renderMarket()};
+window.listRelic=async(id,max)=>{const relic=relics.find(x=>x[0]===id);if(!relic)return;const modal=$('listingModal');modal.dataset.relicId=id;$('listingTitle').textContent='Выставить на биржу';$('listingRelicName').textContent=relic[2];$('listingQuantity').max=String(max);$('listingQuantity').value='1';$('listingQuantityHint').textContent='Доступно предметов: '+max;$('listingPrice').value=String(relic[5]);$('listingError').textContent='';modal.hidden=false;$('listingQuantity').focus();};
 window.buyListing=async(id)=>{if(!confirm('Купить это предложение?'))return;const {error}=await sb.rpc('buy_relic_listing',{p_listing_id:id});if(error)alert('Покупка не прошла: '+error.message);await renderMarket();await renderRating()};
 window.cancelListing=async(id)=>{if(!confirm('Снять объявление с биржи?'))return;const {error}=await sb.rpc('cancel_relic_listing',{p_listing_id:id});if(error)alert('Не удалось снять: '+error.message);await renderMarket()};
 $('refreshMarket').onclick=renderMarket;
@@ -300,6 +327,10 @@ $('githubLogout').onclick=async()=>{const button=$('githubLogout');button.disabl
 sb.auth.onAuthStateChange(()=>{setTimeout(()=>{refreshAuth();renderRating()},0)});
 $('saveNick').onclick=async()=>{let v=$('nickname').value.trim();if(!v)return alert('Введи ник.');if(v.length>18)return alert('Ник должен быть не длиннее 18 символов.');const {data:{session}}=await sb.auth.getSession();if(session){const {data,error}=await sb.from('player_profiles').update({nickname:v}).eq('user_id',session.user.id).select('nickname').maybeSingle();if(error)return alert('Не удалось изменить ник в аккаунте: '+error.message);if(!data)return alert('Профиль игрока не найден в базе. Выйди из аккаунта и войди снова.');}s.nick=v;save();$('nickname').value=s.nick;render();await renderRating();alert('Ник успешно сохранён!')};
 $('reset').onclick=()=>{if(confirm('Точно сбросить весь прогресс?')){s=defaultState();save();render();renderShop()}};
+
+document.querySelectorAll('[data-listing-close]').forEach(el=>el.addEventListener('click',()=>$('listingModal').hidden=true));
+$('listingSubmit').onclick=async()=>{const idName=$('listingRelicName').textContent;const id=$('listingModal').dataset.relicId;const max=Number($('listingQuantity').max),q=Number($('listingQuantity').value),p=Number($('listingPrice').value);if(!Number.isInteger(q)||q<1||q>max){$('listingError').textContent='Укажи количество от 1 до '+max+'.';return;}if(!Number.isSafeInteger(p)||p<1){$('listingError').textContent='Укажи целую цену больше нуля.';return;}const button=$('listingSubmit');button.disabled=true;button.textContent='Публикуем…';const {error}=await sb.rpc('create_relic_listing',{p_relic_id:id,p_quantity:q,p_unit_price:p});button.disabled=false;button.textContent='Выставить';if(error){$('listingError').textContent='Не удалось выставить: '+error.message;return;}$('listingModal').hidden=true;await renderMarket();};
+
 function applyTheme(theme){const dark=theme==='dark';document.body.dataset.theme=dark?'dark':'light';const button=$('themeToggle');if(button){button.setAttribute('aria-label',dark?'Включить светлую тему':'Включить тёмную тему');button.title=dark?'Включить светлую тему':'Включить тёмную тему';}try{localStorage.setItem('richClickTheme',dark?'dark':'light')}catch{}}
 $('themeToggle').onclick=()=>applyTheme(document.body.dataset.theme==='dark'?'light':'dark');
 let savedTheme='light';try{savedTheme=localStorage.getItem('richClickTheme')==='dark'?'dark':'light'}catch{}applyTheme(savedTheme);
